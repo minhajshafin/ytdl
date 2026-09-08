@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "billy.ytdl",
+  "name": "YouTube Downloader",
+  "version": "1.0.0",
+  "author": "Minhaj Shafin",
+  "license": "MIT",
+  "description": "Download audio and video from YouTube using yt-dlp",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "YouTube Downloader",
+    "category": "Media",
+    "allowMultiple": false,
+    "defaultSection": "center"
+  }
+}

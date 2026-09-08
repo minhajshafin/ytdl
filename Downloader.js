@@ -8,7 +8,7 @@ var AUDIO_FORMATS = [
     sublabel: "AAC Best Quality",
     isAudio: true,
     ext: "m4a",
-    args: ["-x", "--audio-format", "m4a"]
+    args: ["-x", "--audio-format", "m4a", "--embed-thumbnail", "--embed-metadata"]
   },
   {
     id: "mp3",
@@ -17,7 +17,7 @@ var AUDIO_FORMATS = [
     sublabel: "High Quality MP3",
     isAudio: true,
     ext: "mp3",
-    args: ["-x", "--audio-format", "mp3", "--audio-quality", "0"]
+    args: ["-x", "--audio-format", "mp3", "--audio-quality", "0", "--embed-thumbnail", "--embed-metadata"]
   },
   {
     id: "opus",
@@ -26,7 +26,7 @@ var AUDIO_FORMATS = [
     sublabel: "Modern Opus Stream",
     isAudio: true,
     ext: "opus",
-    args: ["-x", "--audio-format", "opus"]
+    args: ["-x", "--audio-format", "opus", "--embed-thumbnail", "--embed-metadata"]
   },
   {
     id: "flac",
@@ -35,7 +35,7 @@ var AUDIO_FORMATS = [
     sublabel: "Lossless Audio",
     isAudio: true,
     ext: "flac",
-    args: ["-x", "--audio-format", "flac"]
+    args: ["-x", "--audio-format", "flac", "--embed-thumbnail", "--embed-metadata"]
   }
 ];
 

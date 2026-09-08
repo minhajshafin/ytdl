@@ -31,12 +31,24 @@ Panel {
   readonly property string currentTagline: taglines[taglineIndex % taglines.length]
 
   property string videoTitle: ""
+  property string videoUploader: ""
   property string videoDuration: ""
+  property string videoThumbnail: ""
   property bool metadataLoading: false
 
   property var queue: []
   property var recentDownloads: []
   readonly property bool isDownloading: ytdlp.running
+
+  // Dynamic Theme Colors
+  readonly property color surfaceColor: Color.popups.background
+  readonly property color surfaceBorder: Color.popups.border
+  readonly property color insetBg: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.05)
+  readonly property color insetBorder: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.12)
+  readonly property color activePillBg: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.22)
+  readonly property color textMain: Color.popups.text
+  readonly property color textMuted: Color.muted
+  readonly property color accentColor: Color.accent
 
   function open() {
     root.controller.show()
@@ -86,7 +98,9 @@ Panel {
     if (metaProc.running) metaProc.running = false
     root.metadataLoading = true
     root.videoTitle = ""
+    root.videoUploader = ""
     root.videoDuration = ""
+    root.videoThumbnail = ""
     metaProc.command = ["yt-dlp", "--dump-json", "--no-playlist", "--skip-download", url]
     metaProc.running = true
   }
@@ -98,7 +112,7 @@ Panel {
     var fmt = root.currentFormat
     var homeDir = Quickshell.env("HOME") || "/home/billy"
     var dest = fmt.isAudio ? (homeDir + "/Music") : (homeDir + "/Videos")
-    var title = root.videoTitle !== "" ? root.videoTitle : "Fetch Stream"
+    var title = root.videoTitle !== "" ? root.videoTitle : "YouTube Media"
 
     var task = {
       url: url,
@@ -118,7 +132,9 @@ Panel {
 
     root.inputUrl = ""
     root.videoTitle = ""
+    root.videoUploader = ""
     root.videoDuration = ""
+    root.videoThumbnail = ""
     root.dropdownOpen = false
   }
 
@@ -157,7 +173,9 @@ Panel {
           var meta = JSON.parse(String(text || "").trim())
           if (meta && meta.title) {
             root.videoTitle = meta.title
+            root.videoUploader = meta.uploader || meta.channel || ""
             root.videoDuration = meta.duration_string || Downloader.formatDuration(meta.duration)
+            root.videoThumbnail = meta.thumbnail || ""
           }
         } catch (e) {}
       }
@@ -170,7 +188,7 @@ Panel {
   Process {
     id: notifyProc
     function send(title, body, icon) {
-      command = ["notify-send", "-a", "Fetch", "-i", icon || "video-x-generic", title, body]
+      command = ["notify-send", "-a", "YouTube Downloader", "-i", icon || "video-x-generic", title, body]
       running = true
     }
   }
@@ -219,8 +237,8 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: keyCatcher
-    contentWidth: panel.fittedContentWidth(Style.space(310))
-    contentHeight: panel.fittedContentHeight(cardColumn.implicitHeight + Style.space(32), Style.space(560))
+    contentWidth: panel.fittedContentWidth(Style.space(400))
+    contentHeight: panel.fittedContentHeight(cardColumn.implicitHeight + Style.space(36), Style.space(620))
 
     PanelKeyCatcher {
       id: keyCatcher
@@ -274,13 +292,13 @@ Panel {
         }
       }
 
-      // Main Outer Card Container
+      // Outer Card
       Rectangle {
         id: cardBg
         anchors.fill: parent
-        color: "#13161f"
+        color: root.surfaceColor
         radius: Style.space(14)
-        border.color: "#202534"
+        border.color: root.surfaceBorder
         border.width: 1
 
         Column {
@@ -288,39 +306,39 @@ Panel {
           anchors.top: parent.top
           anchors.left: parent.left
           anchors.right: parent.right
-          anchors.margins: Style.space(16)
-          spacing: Style.space(11)
+          anchors.margins: Style.space(18)
+          spacing: Style.space(12)
 
-          // 1. Header (Icon, Title "Fetch", Subtitle rotating satire)
+          // 1. Header (Monochrome YouTube logo, title "YouTube downloader", rotating satire subtitle)
           RowLayout {
             width: parent.width
             spacing: Style.space(10)
 
             Text {
-              text: "\uf019"
+              text: "\uf16a"
               font.family: Style.font.family
-              font.pixelSize: Style.space(18)
-              color: "#ffffff"
+              font.pixelSize: Style.space(19)
+              color: root.textMain
             }
 
             ColumnLayout {
               Layout.fillWidth: true
-              spacing: Style.space(1)
+              spacing: Style.space(2)
 
               Text {
-                text: "Fetch"
+                text: "YouTube downloader"
                 font.family: Style.font.family
-                font.pixelSize: Style.space(16)
+                font.pixelSize: Style.space(15)
                 font.bold: true
-                color: "#ffffff"
+                color: root.textMain
               }
 
               Text {
                 text: root.currentTagline
                 font.family: Style.font.family
-                font.pixelSize: Style.space(9)
+                font.pixelSize: Style.space(10)
                 font.bold: true
-                color: "#606b82"
+                color: root.textMuted
 
                 Behavior on text {
                   SequentialAnimation {
@@ -332,27 +350,27 @@ Panel {
             }
           }
 
-          // 2. URL Input with embedded Clipboard icon
+          // 2. URL Input Bar with embedded Clipboard Icon
           Rectangle {
             width: parent.width
-            height: Style.space(36)
-            color: "#181c28"
-            radius: Style.space(8)
-            border.color: urlField.activeFocus ? "#3b445c" : "#242938"
+            height: Style.space(38)
+            color: root.insetBg
+            radius: Style.space(10)
+            border.color: urlField.activeFocus ? root.accentColor : root.insetBorder
             border.width: 1
 
             RowLayout {
               anchors.fill: parent
-              anchors.leftMargin: Style.space(10)
-              anchors.rightMargin: Style.space(8)
+              anchors.leftMargin: Style.space(12)
+              anchors.rightMargin: Style.space(10)
               spacing: Style.space(8)
 
-              // Clipboard icon button (click to paste)
+              // Clipboard Icon (Click to paste)
               Text {
                 text: "\uf0ea"
                 font.family: Style.font.family
-                font.pixelSize: Style.space(12)
-                color: clipMouse.containsMouse ? "#ffffff" : "#606b82"
+                font.pixelSize: Style.space(14)
+                color: clipMouse.containsMouse ? root.textMain : root.textMuted
 
                 MouseArea {
                   id: clipMouse
@@ -372,10 +390,10 @@ Panel {
                 background: null
                 padding: 0
                 font.family: Style.font.family
-                font.pixelSize: Style.space(11)
-                color: "#ffffff"
+                font.pixelSize: Style.space(12)
+                color: root.textMain
                 placeholderText: "youtube.com/watch?v=3fK2q9x..."
-                placeholderTextColor: "#40495e"
+                placeholderTextColor: Qt.darker(root.textMuted, 1.2)
                 text: root.inputUrl
                 onTextEdited: {
                   root.inputUrl = text
@@ -407,25 +425,82 @@ Panel {
             }
           }
 
-          // Video title info (if loading or present)
-          Text {
+          // 3. Link Preview Card (Under URL Bar: 16:9 thumbnail + title + channel/duration)
+          Rectangle {
             width: parent.width
+            height: previewRow.implicitHeight + Style.space(12)
             visible: root.metadataLoading || root.videoTitle !== ""
-            text: root.metadataLoading ? "Probing stream..." : (root.videoTitle + (root.videoDuration !== "" ? " · " + root.videoDuration : ""))
-            color: "#606b82"
-            font.family: Style.font.family
-            font.pixelSize: Style.space(10)
-            font.bold: true
-            elide: Text.ElideRight
+            color: root.insetBg
+            radius: Style.space(8)
+            border.color: root.insetBorder
+            border.width: 1
+
+            RowLayout {
+              id: previewRow
+              anchors.fill: parent
+              anchors.margins: Style.space(6)
+              spacing: Style.space(10)
+
+              // 16:9 Mini Thumbnail
+              Rectangle {
+                width: Style.space(56)
+                height: Style.space(32)
+                radius: Style.space(4)
+                color: Qt.rgba(0, 0, 0, 0.3)
+                clip: true
+
+                Image {
+                  visible: root.videoThumbnail !== ""
+                  anchors.fill: parent
+                  source: root.videoThumbnail
+                  fillMode: Image.PreserveAspectCrop
+                }
+
+                Text {
+                  visible: root.videoThumbnail === ""
+                  anchors.centerIn: parent
+                  text: root.metadataLoading ? "\uf110" : "\uf16a"
+                  font.family: Style.font.family
+                  font.pixelSize: Style.space(14)
+                  color: root.textMuted
+                }
+              }
+
+              // Metadata Text
+              ColumnLayout {
+                Layout.fillWidth: true
+                spacing: Style.space(1)
+
+                Text {
+                  Layout.fillWidth: true
+                  text: root.metadataLoading ? "Fetching video info..." : root.videoTitle
+                  color: root.textMain
+                  font.family: Style.font.family
+                  font.pixelSize: Style.space(11)
+                  font.bold: true
+                  elide: Text.ElideRight
+                }
+
+                Text {
+                  Layout.fillWidth: true
+                  visible: !root.metadataLoading && (root.videoUploader !== "" || root.videoDuration !== "")
+                  text: (root.videoUploader !== "" ? root.videoUploader : "") + (root.videoDuration !== "" ? " · " + root.videoDuration : "")
+                  color: root.textMuted
+                  font.family: Style.font.family
+                  font.pixelSize: Style.space(10)
+                  elide: Text.ElideRight
+                }
+              }
+            }
           }
 
-          // 3. Segmented Tab Switcher: [ AUDIO ] [ VIDEO ]
+          // 4. Segmented Tab Switcher: [ AUDIO ] [ VIDEO ]
           Rectangle {
             width: parent.width
             height: Style.space(34)
-            color: "#181c28"
-            radius: Style.space(8)
-            border.color: "#242938"
+            color: root.insetBg
+            radius: Style.space(10)
+            border.color: root.insetBorder
             border.width: 1
 
             Row {
@@ -437,8 +512,8 @@ Panel {
               Rectangle {
                 width: (parent.width - Style.space(4)) / 2
                 height: parent.height
-                radius: Style.space(6)
-                color: root.isAudioMode ? "#252b3b" : "transparent"
+                radius: Style.space(7)
+                color: root.isAudioMode ? root.activePillBg : "transparent"
 
                 Text {
                   anchors.centerIn: parent
@@ -446,7 +521,7 @@ Panel {
                   font.family: Style.font.family
                   font.pixelSize: Style.space(11)
                   font.bold: true
-                  color: root.isAudioMode ? "#ffffff" : "#606b82"
+                  color: root.isAudioMode ? root.textMain : root.textMuted
                 }
 
                 MouseArea {
@@ -464,8 +539,8 @@ Panel {
               Rectangle {
                 width: (parent.width - Style.space(4)) / 2
                 height: parent.height
-                radius: Style.space(6)
-                color: !root.isAudioMode ? "#252b3b" : "transparent"
+                radius: Style.space(7)
+                color: !root.isAudioMode ? root.activePillBg : "transparent"
 
                 Text {
                   anchors.centerIn: parent
@@ -473,7 +548,7 @@ Panel {
                   font.family: Style.font.family
                   font.pixelSize: Style.space(11)
                   font.bold: true
-                  color: !root.isAudioMode ? "#ffffff" : "#606b82"
+                  color: !root.isAudioMode ? root.textMain : root.textMuted
                 }
 
                 MouseArea {
@@ -489,42 +564,41 @@ Panel {
             }
           }
 
-          // 4. Quality Dropdown Trigger
+          // 5. Quality Dropdown Trigger
           Rectangle {
             width: parent.width
-            height: Style.space(34)
-            color: "#181c28"
-            radius: Style.space(8)
-            border.color: root.dropdownOpen ? "#3b445c" : "#242938"
+            height: Style.space(36)
+            color: root.insetBg
+            radius: Style.space(10)
+            border.color: root.dropdownOpen ? root.accentColor : root.insetBorder
             border.width: 1
 
             RowLayout {
               anchors.fill: parent
-              anchors.leftMargin: Style.space(10)
-              anchors.rightMargin: Style.space(10)
+              anchors.leftMargin: Style.space(12)
+              anchors.rightMargin: Style.space(12)
               spacing: Style.space(8)
 
               Text {
                 text: "\uf1de"
                 font.family: Style.font.family
-                font.pixelSize: Style.space(12)
-                color: "#606b82"
+                font.pixelSize: Style.space(13)
+                color: root.textMuted
               }
 
               Text {
                 Layout.fillWidth: true
                 text: root.currentFormat.display
                 font.family: Style.font.family
-                font.pixelSize: Style.space(11)
-                font.bold: true
-                color: "#ffffff"
+                font.pixelSize: Style.space(12)
+                color: root.textMain
               }
 
               Text {
                 text: root.dropdownOpen ? "\uf077" : "\uf078"
                 font.family: Style.font.family
-                font.pixelSize: Style.space(10)
-                color: "#606b82"
+                font.pixelSize: Style.space(13)
+                color: root.textMuted
               }
             }
 
@@ -538,11 +612,11 @@ Panel {
             }
           }
 
-          // 4b. Dropdown Options List (collapsible)
+          // 5b. Dropdown Options List
           Column {
             width: parent.width
             visible: root.dropdownOpen
-            spacing: Style.space(3)
+            spacing: Style.space(4)
 
             Repeater {
               model: root.currentFormats
@@ -551,36 +625,41 @@ Panel {
                 required property var modelData
                 required property int index
                 width: cardColumn.width
-                height: Style.space(30)
-                radius: Style.space(6)
-                color: (root.isAudioMode ? root.selectedAudioIndex : root.selectedVideoIndex) === index ? "#252b3b" : "#181c28"
-                border.color: (root.isAudioMode ? root.selectedAudioIndex : root.selectedVideoIndex) === index ? "#3b445c" : "#202534"
+                height: Style.space(32)
+                radius: Style.space(7)
+                color: (root.isAudioMode ? root.selectedAudioIndex : root.selectedVideoIndex) === index
+                  ? root.activePillBg
+                  : (optMouse.containsMouse ? Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.08) : root.insetBg)
+                border.color: (root.isAudioMode ? root.selectedAudioIndex : root.selectedVideoIndex) === index
+                  ? root.accentColor
+                  : root.insetBorder
                 border.width: 1
 
                 RowLayout {
                   anchors.fill: parent
-                  anchors.leftMargin: Style.space(10)
-                  anchors.rightMargin: Style.space(10)
+                  anchors.leftMargin: Style.space(12)
+                  anchors.rightMargin: Style.space(12)
 
                   Text {
                     text: modelData.display
                     font.family: Style.font.family
-                    font.pixelSize: Style.space(11)
-                    font.bold: true
-                    color: "#ffffff"
+                    font.pixelSize: Style.space(12)
+                    color: root.textMain
                     Layout.fillWidth: true
                   }
 
                   Text {
                     text: modelData.sublabel
                     font.family: Style.font.family
-                    font.pixelSize: Style.space(9)
-                    color: "#606b82"
+                    font.pixelSize: Style.space(10)
+                    color: root.textMuted
                   }
                 }
 
                 MouseArea {
+                  id: optMouse
                   anchors.fill: parent
+                  hoverEnabled: true
                   cursorShape: Qt.PointingHandCursor
                   onClicked: {
                     if (root.isAudioMode) root.selectedAudioIndex = index
@@ -593,32 +672,32 @@ Panel {
             }
           }
 
-          // 5. Download Action Button
+          // 6. Download Action Button (matches ytdl.html DOWNLOAD row)
           Rectangle {
             width: parent.width
-            height: Style.space(32)
-            radius: Style.space(8)
-            color: dlMouse.containsMouse ? "#2f364a" : "#252b3b"
-            border.color: "#343d52"
+            height: Style.space(38)
+            radius: Style.space(10)
+            color: dlMouse.containsMouse ? Qt.lighter(root.activePillBg, 1.2) : root.activePillBg
+            border.color: dlMouse.containsMouse ? root.accentColor : Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.18)
             border.width: 1
 
             RowLayout {
               anchors.centerIn: parent
-              spacing: Style.space(6)
+              spacing: Style.space(8)
 
               Text {
                 text: "\uf019"
                 font.family: Style.font.family
-                font.pixelSize: Style.space(11)
-                color: "#ffffff"
+                font.pixelSize: Style.space(14)
+                color: root.textMain
               }
 
               Text {
-                text: "Fetch " + (root.isAudioMode ? "Audio" : "Video")
+                text: "DOWNLOAD"
                 font.family: Style.font.family
-                font.pixelSize: Style.space(11)
+                font.pixelSize: Style.space(12)
                 font.bold: true
-                color: "#ffffff"
+                color: root.textMain
               }
             }
 
@@ -631,23 +710,24 @@ Panel {
             }
           }
 
-          // 6. STATUS Section (2x2 Grid + Progress Bar)
+          // 7. STATUS Section (Visible ONLY when downloading)
           Column {
             width: parent.width
-            spacing: Style.space(6)
+            visible: ytdlp.running
+            spacing: Style.space(8)
 
             Text {
               text: "STATUS"
               font.family: Style.font.family
-              font.pixelSize: Style.space(9)
+              font.pixelSize: Style.space(10)
               font.bold: true
-              color: "#505a72"
+              color: root.textMuted
             }
 
-            // 2x2 Grid
+            // 2x2 Grid (State, Speed, Size, ETA)
             Column {
               width: parent.width
-              spacing: Style.space(6)
+              spacing: Style.space(10)
 
               // Row 1: State & Speed
               Row {
@@ -655,37 +735,35 @@ Panel {
 
                 Column {
                   width: parent.width / 2
-                  spacing: Style.space(1)
+                  spacing: Style.space(2)
                   Text {
                     text: "State"
                     font.family: Style.font.family
                     font.pixelSize: Style.space(10)
-                    color: "#606b82"
+                    color: root.textMuted
                   }
                   Text {
-                    text: ytdlp.running ? ytdlp.stateText : (root.inputUrl !== "" ? "Ready" : "Idle")
+                    text: ytdlp.stateText
                     font.family: Style.font.family
                     font.pixelSize: Style.space(13)
-                    font.bold: true
-                    color: "#ffffff"
+                    color: root.textMain
                   }
                 }
 
                 Column {
                   width: parent.width / 2
-                  spacing: Style.space(1)
+                  spacing: Style.space(2)
                   Text {
                     text: "Speed"
                     font.family: Style.font.family
                     font.pixelSize: Style.space(10)
-                    color: "#606b82"
+                    color: root.textMuted
                   }
                   Text {
-                    text: ytdlp.running && ytdlp.speedText !== "" ? ytdlp.speedText : "—"
+                    text: ytdlp.speedText !== "" ? ytdlp.speedText : "—"
                     font.family: Style.font.family
                     font.pixelSize: Style.space(13)
-                    font.bold: true
-                    color: "#ffffff"
+                    color: root.textMain
                   }
                 }
               }
@@ -696,53 +774,51 @@ Panel {
 
                 Column {
                   width: parent.width / 2
-                  spacing: Style.space(1)
+                  spacing: Style.space(2)
                   Text {
                     text: "Size"
                     font.family: Style.font.family
                     font.pixelSize: Style.space(10)
-                    color: "#606b82"
+                    color: root.textMuted
                   }
                   Text {
-                    text: ytdlp.running && ytdlp.sizeText !== "" ? ytdlp.sizeText : "—"
+                    text: ytdlp.sizeText !== "" ? ytdlp.sizeText : "—"
                     font.family: Style.font.family
                     font.pixelSize: Style.space(13)
-                    font.bold: true
-                    color: "#ffffff"
+                    color: root.textMain
                   }
                 }
 
                 Column {
                   width: parent.width / 2
-                  spacing: Style.space(1)
+                  spacing: Style.space(2)
                   Text {
                     text: "ETA"
                     font.family: Style.font.family
                     font.pixelSize: Style.space(10)
-                    color: "#606b82"
+                    color: root.textMuted
                   }
                   Text {
-                    text: ytdlp.running && ytdlp.etaText !== "" ? ytdlp.etaText : "—"
+                    text: ytdlp.etaText !== "" ? ytdlp.etaText : "—"
                     font.family: Style.font.family
                     font.pixelSize: Style.space(13)
-                    font.bold: true
-                    color: "#ffffff"
+                    color: root.textMain
                   }
                 }
               }
             }
 
-            // Horizontal Progress Bar
+            // Slim Horizontal Progress Bar
             Rectangle {
               width: parent.width
               height: Style.space(4)
               radius: Style.space(2)
-              color: "#242938"
+              color: root.insetBorder
 
               Rectangle {
                 height: parent.height
                 radius: parent.radius
-                color: "#ffffff"
+                color: root.accentColor
                 width: Math.max(0, Math.min(parent.width, parent.width * (ytdlp.progress / 100)))
 
                 Behavior on width {
@@ -752,11 +828,11 @@ Panel {
             }
           }
 
-          // 7. RECENT Section (with Clear button and Auto-Clear on close)
+          // 8. RECENT Section (Visible when completed items exist in this session)
           Column {
             width: parent.width
             visible: root.recentDownloads.length > 0 || root.queue.length > 0
-            spacing: Style.space(6)
+            spacing: Style.space(8)
 
             RowLayout {
               width: parent.width
@@ -764,9 +840,9 @@ Panel {
               Text {
                 text: "RECENT"
                 font.family: Style.font.family
-                font.pixelSize: Style.space(9)
+                font.pixelSize: Style.space(10)
                 font.bold: true
-                color: "#505a72"
+                color: root.textMuted
                 Layout.fillWidth: true
               }
 
@@ -774,7 +850,7 @@ Panel {
                 text: "Clear"
                 font.family: Style.font.family
                 font.pixelSize: Style.space(10)
-                color: clearMouse.containsMouse ? "#ffffff" : "#606b82"
+                color: clearMouse.containsMouse ? root.textMain : root.textMuted
 
                 MouseArea {
                   id: clearMouse
@@ -789,7 +865,7 @@ Panel {
               }
             }
 
-            // Queue items
+            // Queue Items
             Repeater {
               model: root.queue
 
@@ -798,9 +874,9 @@ Panel {
                 required property int index
                 width: cardColumn.width
                 height: Style.space(34)
-                color: "#181c28"
-                radius: Style.space(8)
-                border.color: "#242938"
+                color: root.insetBg
+                radius: Style.space(9)
+                border.color: root.insetBorder
                 border.width: 1
 
                 RowLayout {
@@ -812,15 +888,15 @@ Panel {
                   Text {
                     text: "\uf110"
                     font.family: Style.font.family
-                    font.pixelSize: Style.space(12)
-                    color: "#606b82"
+                    font.pixelSize: Style.space(13)
+                    color: root.textMuted
                   }
 
                   Text {
                     text: modelData.title || modelData.url
                     font.family: Style.font.family
-                    font.pixelSize: Style.space(11)
-                    color: "#ffffff"
+                    font.pixelSize: Style.space(12)
+                    color: root.textMain
                     Layout.fillWidth: true
                     elide: Text.ElideRight
                   }
@@ -829,7 +905,7 @@ Panel {
                     text: "Queued"
                     font.family: Style.font.family
                     font.pixelSize: Style.space(10)
-                    color: "#606b82"
+                    color: root.textMuted
                   }
                 }
               }
@@ -843,9 +919,9 @@ Panel {
                 required property var modelData
                 width: cardColumn.width
                 height: Style.space(34)
-                color: recentMouse.containsMouse ? "#1f2433" : "#181c28"
-                radius: Style.space(8)
-                border.color: "#242938"
+                color: recentMouse.containsMouse ? Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.08) : root.insetBg
+                radius: Style.space(9)
+                border.color: root.insetBorder
                 border.width: 1
 
                 RowLayout {
@@ -857,15 +933,15 @@ Panel {
                   Text {
                     text: modelData.isAudio ? "\uf025" : "\uf03d"
                     font.family: Style.font.family
-                    font.pixelSize: Style.space(12)
-                    color: "#606b82"
+                    font.pixelSize: Style.space(13)
+                    color: root.textMuted
                   }
 
                   Text {
                     text: modelData.title
                     font.family: Style.font.family
-                    font.pixelSize: Style.space(11)
-                    color: "#ffffff"
+                    font.pixelSize: Style.space(12)
+                    color: root.textMain
                     Layout.fillWidth: true
                     elide: Text.ElideRight
                   }
@@ -873,8 +949,8 @@ Panel {
                   Text {
                     text: "\uf00c"
                     font.family: Style.font.family
-                    font.pixelSize: Style.space(11)
-                    color: "#4ade80"
+                    font.pixelSize: Style.space(13)
+                    color: root.accentColor
                   }
                 }
 

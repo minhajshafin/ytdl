@@ -10,7 +10,6 @@ import "Downloader.js" as Downloader
 Panel {
   id: root
   moduleName: "billy.ytdl"
-  ipcTarget: ""
   manageIpc: false
 
   property var anchorItem: null
@@ -175,8 +174,8 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: keyCatcher
-    contentWidth: panel.fittedContentWidth(Style.space(340))
-    contentHeight: panel.fittedContentHeight(panelColumn.implicitHeight, Style.space(520))
+    contentWidth: panel.fittedContentWidth(Style.space(330))
+    contentHeight: panel.fittedContentHeight(panelColumn.implicitHeight, Style.space(500))
 
     PanelKeyCatcher {
       id: keyCatcher
@@ -185,10 +184,13 @@ Panel {
       onCloseRequested: root.close()
       onActivateRequested: root.startDownload()
       onTabRequested: function(direction) {
-        if (direction > 0) urlField.forceActiveFocus()
-        else root.switchPanel(direction)
+        urlField.forceActiveFocus()
       }
       onMoveRequested: function(dx, dy) {
+        if (dy < 0 && root.selectedFormatIndex === 0) {
+          urlField.forceActiveFocus()
+          return
+        }
         if (dx !== 0) {
           root.selectedFormatIndex = (root.selectedFormatIndex + dx + root.formats.length) % root.formats.length
         } else if (dy > 0) {
@@ -210,23 +212,6 @@ Panel {
         }
       }
 
-      Keys.onUpPressed: function(event) {
-        root.selectedFormatIndex = (root.selectedFormatIndex - 1 + root.formats.length) % root.formats.length
-        event.accepted = true
-      }
-      Keys.onDownPressed: function(event) {
-        root.selectedFormatIndex = (root.selectedFormatIndex + 1) % root.formats.length
-        event.accepted = true
-      }
-      Keys.onLeftPressed: function(event) {
-        root.selectedFormatIndex = (root.selectedFormatIndex - 1 + root.formats.length) % root.formats.length
-        event.accepted = true
-      }
-      Keys.onRightPressed: function(event) {
-        root.selectedFormatIndex = (root.selectedFormatIndex + 1) % root.formats.length
-        event.accepted = true
-      }
-
       Flickable {
         id: panelFlick
         anchors.fill: parent
@@ -245,12 +230,12 @@ Panel {
           // 1. Minimal Header
           RowLayout {
             width: parent.width
-            spacing: Style.space(8)
+            spacing: Style.space(6)
 
             Text {
               text: "\uf16a"
               font.family: Style.font.family
-              font.pixelSize: Style.font.title
+              font.pixelSize: Style.space(13)
               color: Color.foreground
             }
 
@@ -258,7 +243,7 @@ Panel {
               Layout.fillWidth: true
               text: "YouTube Downloader"
               font.family: Style.font.family
-              font.pixelSize: Style.font.title
+              font.pixelSize: Style.font.body
               font.bold: true
               color: Color.foreground
             }
@@ -281,7 +266,7 @@ Panel {
             TextField {
               id: urlField
               Layout.fillWidth: true
-              placeholderText: "Paste media URL..."
+              placeholderText: "Paste link (https://...)"
               text: root.inputUrl
               onTextEdited: {
                 root.inputUrl = text
@@ -294,12 +279,10 @@ Panel {
               }
               Keys.onDownPressed: function(event) {
                 keyCatcher.forceActiveFocus()
-                root.selectedFormatIndex = (root.selectedFormatIndex + 1) % root.formats.length
                 event.accepted = true
               }
-              Keys.onUpPressed: function(event) {
+              Keys.onTabPressed: function(event) {
                 keyCatcher.forceActiveFocus()
-                root.selectedFormatIndex = (root.selectedFormatIndex - 1 + root.formats.length) % root.formats.length
                 event.accepted = true
               }
               Keys.onEscapePressed: function(event) {
@@ -324,7 +307,7 @@ Panel {
             }
           }
 
-          // 3. Metadata Preview (minimal text label)
+          // 3. Metadata Preview (subtle 1-line label)
           Column {
             width: parent.width
             visible: root.metadataLoading || root.videoTitle !== ""
@@ -363,7 +346,7 @@ Panel {
                 required property var modelData
                 required property int index
                 width: parent.width
-                text: "[" + modelData.key + "] " + modelData.label + " (" + modelData.sublabel + ")"
+                text: "[" + modelData.key + "] " + modelData.label + "  ·  " + modelData.sublabel
                 iconText: modelData.isAudio ? "\uf025" : "\uf03d"
                 selected: root.selectedFormatIndex === index
                 accent: Color.accent

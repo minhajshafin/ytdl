@@ -72,6 +72,8 @@ BarWidget {
     bar: root.bar
     text: "\uf16a"
     slotSize: Style.bar.statusSlot
+    fontSize: Style.space(11)
+    opticalSize: Style.space(12)
     tooltipText: root.isDownloading ? "YouTube Downloader (Downloading...)" : "YouTube Downloader"
 
     Rectangle {

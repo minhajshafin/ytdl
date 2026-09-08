@@ -82,6 +82,17 @@ Designed to seamlessly match Omarchy's native aesthetic with dynamic theme react
    omarchy restart shell
    ```
 
+### Removal
+
+To disable and remove the plugin:
+
+```bash
+omarchy bar remove billy.ytdl
+omarchy plugin disable billy.ytdl
+rm -rf ~/.config/omarchy/plugins/billy.ytdl
+omarchy restart shell
+```
+
 ---
 
 ## ⌨️ Global Keybinding

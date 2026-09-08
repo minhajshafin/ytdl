@@ -1,5 +1,3 @@
-.pragma library
-
 var AUDIO_FORMATS = [
   {
     id: "opus",

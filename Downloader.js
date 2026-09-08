@@ -108,6 +108,17 @@ function isValidUrl(str) {
   );
 }
 
+function extractYoutubeId(url) {
+  if (!url || typeof url !== "string") return "";
+  var m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|shorts\/|watch\?v=|watch\?.+&v=))([\w-]{11})/i);
+  return m ? m[1] : "";
+}
+
+function getInstantThumbnail(url) {
+  var id = extractYoutubeId(url);
+  return id ? ("https://i.ytimg.com/vi/" + id + "/mqdefault.jpg") : "";
+}
+
 function cleanUrl(str) {
   if (!str || typeof str !== "string") return "";
   return str.trim();
@@ -132,7 +143,7 @@ function parseProgress(line) {
   }
 
   // Fallback: [download]  45.2% of 10.00MiB at 2.50MiB/s ETA 00:03
-  var m = str.match(/\[download\]\s+([\d\.]+)%\s+of\s+~?([^\s]+)\s+at\s+([^\s]+)\s+ETA\s+([^\s]+)/);
+  var m = str.match(/\[download\]\s+([\d.]+)%\s+of\s+~?([^\s]+)\s+at\s+([^\s]+)\s+ETA\s+([^\s]+)/);
   if (m) {
     return {
       percent: Math.max(0, Math.min(100, parseFloat(m[1]))),

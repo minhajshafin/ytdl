@@ -50,6 +50,9 @@ Item {
 
     var cmd = [
       "yt-dlp",
+      "--no-playlist",
+      "-N", "4",
+      "--buffer-size", "1024k",
       "--progress",
       "--newline",
       "--no-colors",

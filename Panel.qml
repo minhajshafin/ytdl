@@ -95,12 +95,29 @@ Panel {
   function fetchMetadata(url) {
     if (!url || !Downloader.isValidUrl(url)) return
     if (metaProc.running) metaProc.running = false
+    if (fastMetaProc.running) fastMetaProc.running = false
     root.metadataLoading = true
-    root.videoTitle = ""
-    root.videoUploader = ""
-    root.videoDuration = ""
-    root.videoThumbnail = ""
-    metaProc.command = ["yt-dlp", "--dump-json", "--no-playlist", "--skip-download", url]
+
+    var ytId = Downloader.extractYoutubeId(url)
+    if (ytId) {
+      // 1. Instant 0ms thumbnail display
+      root.videoThumbnail = "https://i.ytimg.com/vi/" + ytId + "/mqdefault.jpg"
+      root.videoTitle = "Loading preview…"
+      root.videoUploader = ""
+      root.videoDuration = ""
+
+      // 2. Fast 150ms oEmbed query via curl
+      fastMetaProc.command = ["curl", "-s", "--max-time", "3", "https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=" + ytId + "&format=json"]
+      fastMetaProc.running = true
+    } else {
+      root.videoTitle = ""
+      root.videoUploader = ""
+      root.videoDuration = ""
+      root.videoThumbnail = ""
+    }
+
+    // 3. Fast yt-dlp metadata extraction (tab-separated --print instead of heavy 50KB JSON)
+    metaProc.command = ["yt-dlp", "--print", "%(title)s\t%(uploader)s\t%(duration)s\t%(thumbnail)s", "--no-playlist", "--skip-download", url]
     metaProc.running = true
   }
 
@@ -111,7 +128,7 @@ Panel {
     var fmt = root.currentFormat
     var homeDir = Quickshell.env("HOME") || "/home/billy"
     var dest = fmt.isAudio ? (homeDir + "/Music") : (homeDir + "/Videos")
-    var title = root.videoTitle !== "" ? root.videoTitle : "YouTube Media"
+    var title = root.videoTitle !== "" && root.videoTitle !== "Loading preview…" ? root.videoTitle : "YouTube Media"
 
     var task = {
       url: url,
@@ -163,20 +180,36 @@ Panel {
   }
 
   Process {
+    id: fastMetaProc
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        try {
+          var data = JSON.parse(String(text || "").trim())
+          if (data && data.title) {
+            root.videoTitle = data.title
+            root.videoUploader = data.author_name || ""
+            if (data.thumbnail_url) root.videoThumbnail = data.thumbnail_url
+          }
+        } catch (e) {}
+      }
+    }
+  }
+
+  Process {
     id: metaProc
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
         root.metadataLoading = false
-        try {
-          var meta = JSON.parse(String(text || "").trim())
-          if (meta && meta.title) {
-            root.videoTitle = meta.title
-            root.videoUploader = meta.uploader || meta.channel || ""
-            root.videoDuration = meta.duration_string || Downloader.formatDuration(meta.duration)
-            root.videoThumbnail = meta.thumbnail || ""
-          }
-        } catch (e) {}
+        var raw = String(text || "").trim()
+        if (raw !== "") {
+          var parts = raw.split("\t")
+          if (parts.length >= 1 && parts[0]) root.videoTitle = parts[0]
+          if (parts.length >= 2 && parts[1]) root.videoUploader = parts[1]
+          if (parts.length >= 3 && parts[2]) root.videoDuration = Downloader.formatDuration(parts[2])
+          if (parts.length >= 4 && parts[3] && !root.videoThumbnail) root.videoThumbnail = parts[3]
+        }
       }
     }
     onExited: function(exitCode) {

@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Effects
 import Quickshell
 import Quickshell.Io
 import qs.Commons
@@ -70,11 +71,33 @@ BarWidget {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: "\uf16a"
     slotSize: Style.bar.statusSlot
-    fontSize: Style.space(11)
-    opticalSize: Style.space(12)
+    opticalSize: Style.space(13)
     tooltipText: root.isDownloading ? "YouTube Downloader (Downloading...)" : "YouTube Downloader"
+
+    iconComponent: Component {
+      Item {
+        anchors.fill: parent
+
+        Image {
+          id: barIconImg
+          anchors.fill: parent
+          source: Qt.resolvedUrl("assets/youtube.svg")
+          sourceSize.width: Style.space(32)
+          sourceSize.height: Style.space(32)
+          fillMode: Image.PreserveAspectFit
+          visible: false
+          layer.enabled: true
+        }
+
+        MultiEffect {
+          anchors.fill: barIconImg
+          source: barIconImg
+          colorization: 1.0
+          colorizationColor: button.active && button.useActiveColor ? button.activeColor : button.foreground
+        }
+      }
+    }
 
     Rectangle {
       visible: root.isDownloading

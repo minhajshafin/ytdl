@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Effects
 import QtQuick.Layouts
 import Quickshell
 import Quickshell.Io
@@ -300,11 +301,28 @@ Panel {
           width: parent.width
           spacing: Style.space(10)
 
-          Text {
-            text: "\uf16a"
-            font.family: Style.font.family
-            font.pixelSize: Style.space(19)
-            color: root.textMain
+          Item {
+            Layout.preferredWidth: Style.space(22)
+            Layout.preferredHeight: Style.space(22)
+            Layout.alignment: Qt.AlignVCenter
+
+            Image {
+              id: headerIconImg
+              anchors.fill: parent
+              source: Qt.resolvedUrl("assets/youtube.svg")
+              sourceSize.width: Style.space(44)
+              sourceSize.height: Style.space(44)
+              fillMode: Image.PreserveAspectFit
+              visible: false
+              layer.enabled: true
+            }
+
+            MultiEffect {
+              anchors.fill: headerIconImg
+              source: headerIconImg
+              colorization: 1.0
+              colorizationColor: root.textMain
+            }
           }
 
           ColumnLayout {
@@ -312,7 +330,7 @@ Panel {
             spacing: Style.space(2)
 
             Text {
-              text: "YouTube downloader"
+              text: "YouTube Downloader"
               font.family: Style.font.family
               font.pixelSize: Style.space(15)
               font.bold: true

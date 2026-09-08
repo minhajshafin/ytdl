@@ -31,9 +31,11 @@ Item {
 
     var cmd = [
       "yt-dlp",
+      "--progress",
       "--newline",
+      "--no-colors",
       "--no-mtime",
-      "--progress-template", "download:DOWNLOAD_PROGRESS:%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s|%(progress._total_bytes_estimate_str)s",
+      "--progress-template", "DOWNLOAD_PROGRESS:%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s|%(progress._total_bytes_estimate_str)s",
       "--print", "after_move:SAVED_PATH:%(filepath)s",
       "-P", task.destination || (task.format && task.format.isAudio ? (Quickshell.env("HOME") + "/Music") : (Quickshell.env("HOME") + "/Videos")),
       "-o", "%(title)s.%(ext)s"
@@ -80,16 +82,16 @@ Item {
           if (p.speed) root.speedText = p.speed
           if (p.eta) root.etaText = p.eta
           if (p.total) root.totalText = p.total
-          root.statusMessage = "Downloading: " + p.percent.toFixed(1) + "%"
+          root.statusMessage = p.percent.toFixed(1) + "%"
           return
         }
 
         if (str.indexOf("[ExtractAudio]") !== -1) {
           root.statusMessage = "Extracting audio..."
         } else if (str.indexOf("[Merger]") !== -1) {
-          root.statusMessage = "Merging video & audio..."
+          root.statusMessage = "Merging formats..."
         } else if (str.indexOf("[download] Destination:") !== -1) {
-          root.statusMessage = "Preparing stream..."
+          root.statusMessage = "Connecting..."
         }
       }
     }
@@ -109,11 +111,11 @@ Item {
 
       if (exitCode === 0) {
         root.progress = 100
-        root.statusMessage = "Complete"
+        root.statusMessage = "Done"
         root.finished(task, true, root.savedPath, "")
       } else {
-        root.statusMessage = "Error"
-        root.finished(task, false, "", root.errorText || ("yt-dlp exited with code " + exitCode))
+        root.statusMessage = "Failed"
+        root.finished(task, false, "", root.errorText || ("yt-dlp failed (code " + exitCode + ")"))
       }
     }
   }

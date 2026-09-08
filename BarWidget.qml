@@ -70,44 +70,26 @@ BarWidget {
     id: button
     anchors.fill: parent
     bar: root.bar
+    text: "\uf16a"
     slotSize: Style.bar.statusSlot
     tooltipText: root.isDownloading ? "YouTube Downloader (Downloading...)" : "YouTube Downloader"
 
-    iconComponent: Component {
-      Item {
-        anchors.fill: parent
+    Rectangle {
+      visible: root.isDownloading
+      width: Style.space(4)
+      height: Style.space(4)
+      radius: Style.space(2)
+      color: Color.accent
+      anchors.top: parent.top
+      anchors.right: parent.right
+      anchors.topMargin: Style.space(4)
+      anchors.rightMargin: Style.space(4)
 
-        Image {
-          id: ytdlIcon
-          source: Qt.resolvedUrl("assets/youtube.svg")
-          anchors.centerIn: parent
-          sourceSize.width: Style.space(16)
-          sourceSize.height: Style.space(16)
-          width: Style.space(16)
-          height: Style.space(16)
-          smooth: true
-        }
-
-        // Active download dot indicator
-        Rectangle {
-          id: activeBadge
-          visible: root.isDownloading
-          width: Style.space(6)
-          height: Style.space(6)
-          radius: Style.space(3)
-          color: Color.accent
-          anchors.top: ytdlIcon.top
-          anchors.right: ytdlIcon.right
-          anchors.topMargin: -Style.space(2)
-          anchors.rightMargin: -Style.space(2)
-
-          SequentialAnimation on opacity {
-            running: root.isDownloading
-            loops: Animation.Infinite
-            NumberAnimation { to: 0.3; duration: 600 }
-            NumberAnimation { to: 1.0; duration: 600 }
-          }
-        }
+      SequentialAnimation on opacity {
+        running: root.isDownloading
+        loops: Animation.Infinite
+        NumberAnimation { to: 0.3; duration: 600 }
+        NumberAnimation { to: 1.0; duration: 600 }
       }
     }
 

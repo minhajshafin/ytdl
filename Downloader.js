@@ -2,49 +2,49 @@
 
 var FORMATS = [
   {
-    id: "best-video",
-    key: "1",
-    label: "Best Video",
-    sublabel: "MP4 Best Quality",
-    isAudio: false,
-    ext: "mp4",
-    args: ["-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best", "--merge-output-format", "mp4"]
-  },
-  {
-    id: "1080p",
-    key: "2",
-    label: "1080p Video",
-    sublabel: "Full HD MP4",
-    isAudio: false,
-    ext: "mp4",
-    args: ["-f", "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]", "--merge-output-format", "mp4"]
-  },
-  {
-    id: "720p",
-    key: "3",
-    label: "720p Video",
-    sublabel: "HD MP4",
-    isAudio: false,
-    ext: "mp4",
-    args: ["-f", "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]", "--merge-output-format", "mp4"]
-  },
-  {
     id: "audio-mp3",
-    key: "4",
-    label: "Audio MP3",
-    sublabel: "High Quality (320k)",
+    key: "1",
+    label: "MP3 Audio",
+    sublabel: "320k",
     isAudio: true,
     ext: "mp3",
     args: ["-x", "--audio-format", "mp3", "--audio-quality", "0"]
   },
   {
     id: "audio-m4a",
-    key: "5",
-    label: "Audio M4A",
-    sublabel: "Native AAC / M4A",
+    key: "2",
+    label: "M4A Audio",
+    sublabel: "AAC Best",
     isAudio: true,
     ext: "m4a",
     args: ["-x", "--audio-format", "m4a"]
+  },
+  {
+    id: "best-video",
+    key: "3",
+    label: "Best Video",
+    sublabel: "MP4 Max",
+    isAudio: false,
+    ext: "mp4",
+    args: ["-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best", "--merge-output-format", "mp4"]
+  },
+  {
+    id: "1080p",
+    key: "4",
+    label: "1080p Video",
+    sublabel: "FHD MP4",
+    isAudio: false,
+    ext: "mp4",
+    args: ["-f", "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]", "--merge-output-format", "mp4"]
+  },
+  {
+    id: "720p",
+    key: "5",
+    label: "720p Video",
+    sublabel: "HD MP4",
+    isAudio: false,
+    ext: "mp4",
+    args: ["-f", "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]", "--merge-output-format", "mp4"]
   }
 ];
 
@@ -101,12 +101,11 @@ function parseProgress(line) {
     };
   }
 
-  // Fallback for 100%: [download] 100% of 10.00MiB in 00:05
-  var m100 = str.match(/\[download\]\s+100%\s+of\s+~?([^\s]+)/);
+  var m100 = str.match(/\[download\]\s+100%/);
   if (m100) {
     return {
       percent: 100,
-      total: m100[1],
+      total: "",
       speed: "",
       eta: "00:00"
     };

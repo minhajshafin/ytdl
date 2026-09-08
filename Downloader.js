@@ -2,6 +2,15 @@
 
 var AUDIO_FORMATS = [
   {
+    id: "opus",
+    label: "opus · best",
+    display: "opus · best",
+    sublabel: "Modern Opus Stream",
+    isAudio: true,
+    ext: "opus",
+    args: ["-x", "--audio-format", "opus", "--embed-thumbnail", "--embed-metadata"]
+  },
+  {
     id: "m4a",
     label: "m4a · audio",
     display: "m4a · audio",
@@ -18,15 +27,6 @@ var AUDIO_FORMATS = [
     isAudio: true,
     ext: "mp3",
     args: ["-x", "--audio-format", "mp3", "--audio-quality", "0", "--embed-thumbnail", "--embed-metadata"]
-  },
-  {
-    id: "opus",
-    label: "opus · best",
-    display: "opus · best",
-    sublabel: "Modern Opus Stream",
-    isAudio: true,
-    ext: "opus",
-    args: ["-x", "--audio-format", "opus", "--embed-thumbnail", "--embed-metadata"]
   },
   {
     id: "flac",

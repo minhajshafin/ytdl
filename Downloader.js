@@ -1,51 +1,94 @@
 .pragma library
 
-var FORMATS = [
+var AUDIO_FORMATS = [
   {
-    id: "audio-mp3",
-    key: "1",
-    label: "MP3 Audio",
-    sublabel: "320k",
-    isAudio: true,
-    ext: "mp3",
-    args: ["-x", "--audio-format", "mp3", "--audio-quality", "0"]
-  },
-  {
-    id: "audio-m4a",
-    key: "2",
-    label: "M4A Audio",
-    sublabel: "AAC Best",
+    id: "m4a",
+    label: "m4a · audio",
+    display: "m4a · audio",
+    sublabel: "AAC Best Quality",
     isAudio: true,
     ext: "m4a",
     args: ["-x", "--audio-format", "m4a"]
   },
   {
-    id: "best-video",
-    key: "3",
-    label: "Best Video",
-    sublabel: "MP4 Max",
-    isAudio: false,
-    ext: "mp4",
-    args: ["-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best", "--merge-output-format", "mp4"]
+    id: "mp3",
+    label: "mp3 · 320k",
+    display: "mp3 · 320k",
+    sublabel: "High Quality MP3",
+    isAudio: true,
+    ext: "mp3",
+    args: ["-x", "--audio-format", "mp3", "--audio-quality", "0"]
   },
   {
+    id: "opus",
+    label: "opus · best",
+    display: "opus · best",
+    sublabel: "Modern Opus Stream",
+    isAudio: true,
+    ext: "opus",
+    args: ["-x", "--audio-format", "opus"]
+  },
+  {
+    id: "flac",
+    label: "flac · lossless",
+    display: "flac · lossless",
+    sublabel: "Lossless Audio",
+    isAudio: true,
+    ext: "flac",
+    args: ["-x", "--audio-format", "flac"]
+  }
+];
+
+var VIDEO_FORMATS = [
+  {
     id: "1080p",
-    key: "4",
-    label: "1080p Video",
-    sublabel: "FHD MP4",
+    label: "1080p · mp4",
+    display: "1080p · mp4",
+    sublabel: "Full HD 1080p",
     isAudio: false,
     ext: "mp4",
     args: ["-f", "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]", "--merge-output-format", "mp4"]
   },
   {
+    id: "best",
+    label: "best · max",
+    display: "best · max quality",
+    sublabel: "Highest Available (4K/1440p)",
+    isAudio: false,
+    ext: "mp4",
+    args: ["-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best", "--merge-output-format", "mp4"]
+  },
+  {
     id: "720p",
-    key: "5",
-    label: "720p Video",
-    sublabel: "HD MP4",
+    label: "720p · mp4",
+    display: "720p · mp4",
+    sublabel: "HD 720p",
     isAudio: false,
     ext: "mp4",
     args: ["-f", "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]", "--merge-output-format", "mp4"]
+  },
+  {
+    id: "480p",
+    label: "480p · mp4",
+    display: "480p · mp4",
+    sublabel: "Standard 480p",
+    isAudio: false,
+    ext: "mp4",
+    args: ["-f", "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=480]+bestaudio/best[height<=480]", "--merge-output-format", "mp4"]
   }
+];
+
+var TAGLINES = [
+  "SIPPING STREAMS",
+  "PIRATING PIXELS",
+  "YOINKING BYTES",
+  "HOARDING MP4S",
+  "BORROWING FRAMES",
+  "SIPHONING SOUND",
+  "NICKING PACKETS",
+  "SCRAPING SERVERS",
+  "FEEDING FIBER",
+  "DIGITAL KLEPTOMANIA"
 ];
 
 function isValidUrl(str) {
@@ -107,7 +150,7 @@ function parseProgress(line) {
       percent: 100,
       total: "",
       speed: "",
-      eta: "00:00"
+      eta: "0s"
     };
   }
 

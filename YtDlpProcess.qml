@@ -8,24 +8,43 @@ Item {
 
   property bool running: proc.running
   property real progress: 0
+  property string stateText: "Idle"
   property string speedText: ""
+  property string sizeText: ""
   property string etaText: ""
-  property string totalText: ""
-  property string statusMessage: ""
   property var currentTask: null
   property string savedPath: ""
   property string errorText: ""
 
   signal finished(var task, bool success, string filePath, string errorMsg)
 
+  function formatEta(raw) {
+    if (!raw || raw === "N/A" || raw === "NA") return ""
+    var str = String(raw).trim()
+    var parts = str.split(":")
+    if (parts.length === 2) {
+      var m = parseInt(parts[0], 10)
+      var s = parseInt(parts[1], 10)
+      if (m === 0) return s + "s"
+      return m + "m " + s + "s"
+    }
+    if (parts.length === 3) {
+      var h = parseInt(parts[0], 10)
+      var m2 = parseInt(parts[1], 10)
+      var s2 = parseInt(parts[2], 10)
+      return h + "h " + m2 + "m"
+    }
+    return str
+  }
+
   function start(task) {
     if (proc.running) return false
     currentTask = task
     progress = 0
+    stateText = "Connecting"
     speedText = ""
+    sizeText = ""
     etaText = ""
-    totalText = ""
-    statusMessage = "Starting download..."
     savedPath = ""
     errorText = ""
 
@@ -55,7 +74,7 @@ Item {
 
   function cancel() {
     if (proc.running) {
-      statusMessage = "Cancelled"
+      stateText = "Cancelled"
       proc.running = false
       if (currentTask) {
         var t = currentTask
@@ -79,19 +98,19 @@ Item {
         var p = Downloader.parseProgress(str)
         if (p) {
           root.progress = p.percent
-          if (p.speed) root.speedText = p.speed
-          if (p.eta) root.etaText = p.eta
-          if (p.total) root.totalText = p.total
-          root.statusMessage = p.percent.toFixed(1) + "%"
+          root.stateText = "Downloading"
+          if (p.speed && p.speed !== "Unknown B/s") root.speedText = p.speed
+          if (p.eta) root.etaText = root.formatEta(p.eta)
+          if (p.total && p.total !== "N/A" && p.total !== "NA") root.sizeText = p.total
           return
         }
 
         if (str.indexOf("[ExtractAudio]") !== -1) {
-          root.statusMessage = "Extracting audio..."
+          root.stateText = "Extracting"
         } else if (str.indexOf("[Merger]") !== -1) {
-          root.statusMessage = "Merging formats..."
+          root.stateText = "Merging"
         } else if (str.indexOf("[download] Destination:") !== -1) {
-          root.statusMessage = "Connecting..."
+          root.stateText = "Downloading"
         }
       }
     }
@@ -111,10 +130,10 @@ Item {
 
       if (exitCode === 0) {
         root.progress = 100
-        root.statusMessage = "Done"
+        root.stateText = "Done"
         root.finished(task, true, root.savedPath, "")
       } else {
-        root.statusMessage = "Failed"
+        root.stateText = "Failed"
         root.finished(task, false, "", root.errorText || ("yt-dlp failed (code " + exitCode + ")"))
       }
     }

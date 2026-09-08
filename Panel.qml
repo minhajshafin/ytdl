@@ -389,9 +389,9 @@ Panel {
             anchors.rightMargin: Style.space(10)
             spacing: Style.space(8)
 
-            // Clipboard Icon (Click to paste)
+            // Paste Icon (Click to paste)
             Text {
-              text: "\uf0ea"
+              text: "\u{F0192}"
               font.family: Style.font.family
               font.pixelSize: Style.space(14)
               color: clipMouse.containsMouse ? root.textMain : root.textMuted

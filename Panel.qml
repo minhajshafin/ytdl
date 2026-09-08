@@ -296,22 +296,27 @@ Panel {
         width: parent.width
         spacing: Style.space(12)
 
-        // 1. Header (Monochrome YouTube logo, title "YouTube downloader", rotating satire subtitle)
-        RowLayout {
+        // 1. Header (Hero: Icon · Title & Subtitle) modeled on the Bluetooth panel
+        Item {
+          id: heroHeader
           width: parent.width
-          spacing: Style.space(10)
+          implicitHeight: Math.max(heroIcon.implicitHeight, heroLabels.implicitHeight)
 
           Item {
-            Layout.preferredWidth: Style.space(22)
-            Layout.preferredHeight: Style.space(22)
-            Layout.alignment: Qt.AlignVCenter
+            id: heroIcon
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
+            width: Style.font.display
+            height: Style.font.display
+            implicitWidth: width
+            implicitHeight: height
 
             Image {
               id: headerIconImg
               anchors.fill: parent
-              source: Qt.resolvedUrl("assets/youtube.svg")
-              sourceSize.width: Style.space(44)
-              sourceSize.height: Style.space(44)
+              source: Qt.resolvedUrl("assets/app.svg")
+              sourceSize.width: Style.space(48)
+              sourceSize.height: Style.space(48)
               fillMode: Image.PreserveAspectFit
               visible: false
               layer.enabled: true
@@ -325,33 +330,48 @@ Panel {
             }
           }
 
-          ColumnLayout {
-            Layout.fillWidth: true
+          Column {
+            id: heroLabels
+            anchors.left: heroIcon.right
+            anchors.leftMargin: Style.space(10)
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
             spacing: Style.space(2)
 
             Text {
               text: "YouTube Downloader"
-              font.family: Style.font.family
-              font.pixelSize: Style.space(15)
+              font.family: root.bar ? root.bar.fontFamily : Style.font.family
+              font.pixelSize: Style.font.title
               font.bold: true
               color: root.textMain
+              elide: Text.ElideRight
+              width: parent.width
             }
 
             Text {
-              text: root.currentTagline
-              font.family: Style.font.family
-              font.pixelSize: Style.space(10)
+              id: heroTagline
+              text: root.currentTagline.toUpperCase()
+              font.family: root.bar ? root.bar.fontFamily : Style.font.family
+              font.pixelSize: Style.font.caption
               font.bold: true
+              font.letterSpacing: 1.2
               color: root.textMuted
+              elide: Text.ElideRight
+              width: parent.width
 
               Behavior on text {
                 SequentialAnimation {
-                  NumberAnimation { target: parent; property: "opacity"; to: 0.2; duration: 150 }
-                  NumberAnimation { target: parent; property: "opacity"; to: 1.0; duration: 150 }
+                  NumberAnimation { target: heroTagline; property: "opacity"; to: 0.2; duration: 150 }
+                  NumberAnimation { target: heroTagline; property: "opacity"; to: 1.0; duration: 150 }
                 }
               }
             }
           }
+        }
+
+        // Straight line under the title section like the bluetooth shell
+        PanelSeparator {
+          foreground: root.textMain
         }
 
         // 2. URL Input Bar with embedded Clipboard Icon

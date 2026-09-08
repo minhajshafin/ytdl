@@ -82,7 +82,7 @@ BarWidget {
         Image {
           id: barIconImg
           anchors.fill: parent
-          source: Qt.resolvedUrl("assets/youtube.svg")
+          source: Qt.resolvedUrl("assets/app.svg")
           sourceSize.width: Style.space(32)
           sourceSize.height: Style.space(32)
           fillMode: Image.PreserveAspectFit

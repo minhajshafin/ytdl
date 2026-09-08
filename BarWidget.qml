@@ -70,11 +70,11 @@ BarWidget {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: "\uf019"
+    text: "\uf16a"
     slotSize: Style.bar.statusSlot
     fontSize: Style.space(11)
     opticalSize: Style.space(12)
-    tooltipText: root.isDownloading ? "Fetch (Downloading...)" : "Fetch Downloader"
+    tooltipText: root.isDownloading ? "YouTube Downloader (Downloading...)" : "YouTube Downloader"
 
     Rectangle {
       visible: root.isDownloading

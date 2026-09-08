@@ -41,8 +41,6 @@ Panel {
   readonly property bool isDownloading: ytdlp.running
 
   // Dynamic Theme Colors
-  readonly property color surfaceColor: Color.popups.background
-  readonly property color surfaceBorder: Color.popups.border
   readonly property color insetBg: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.05)
   readonly property color insetBorder: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.12)
   readonly property color activePillBg: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.22)
@@ -238,7 +236,7 @@ Panel {
     open: root.opened
     focusTarget: keyCatcher
     contentWidth: panel.fittedContentWidth(Style.space(400))
-    contentHeight: panel.fittedContentHeight(cardColumn.implicitHeight + Style.space(36), Style.space(620))
+    contentHeight: panel.fittedContentHeight(cardColumn.implicitHeight, Style.space(620))
 
     PanelKeyCatcher {
       id: keyCatcher
@@ -292,675 +290,662 @@ Panel {
         }
       }
 
-      // Outer Card
-      Rectangle {
-        id: cardBg
-        anchors.fill: parent
-        color: root.surfaceColor
-        radius: Style.space(14)
-        border.color: root.surfaceBorder
-        border.width: 1
+      Column {
+        id: cardColumn
+        width: parent.width
+        spacing: Style.space(12)
 
-        Column {
-          id: cardColumn
-          anchors.top: parent.top
-          anchors.left: parent.left
-          anchors.right: parent.right
-          anchors.margins: Style.space(18)
-          spacing: Style.space(12)
+        // 1. Header (Monochrome YouTube logo, title "YouTube downloader", rotating satire subtitle)
+        RowLayout {
+          width: parent.width
+          spacing: Style.space(10)
 
-          // 1. Header (Monochrome YouTube logo, title "YouTube downloader", rotating satire subtitle)
-          RowLayout {
-            width: parent.width
-            spacing: Style.space(10)
+          Text {
+            text: "\uf16a"
+            font.family: Style.font.family
+            font.pixelSize: Style.space(19)
+            color: root.textMain
+          }
+
+          ColumnLayout {
+            Layout.fillWidth: true
+            spacing: Style.space(2)
 
             Text {
-              text: "\uf16a"
+              text: "YouTube downloader"
               font.family: Style.font.family
-              font.pixelSize: Style.space(19)
+              font.pixelSize: Style.space(15)
+              font.bold: true
               color: root.textMain
             }
 
-            ColumnLayout {
-              Layout.fillWidth: true
-              spacing: Style.space(2)
-
-              Text {
-                text: "YouTube downloader"
-                font.family: Style.font.family
-                font.pixelSize: Style.space(15)
-                font.bold: true
-                color: root.textMain
-              }
-
-              Text {
-                text: root.currentTagline
-                font.family: Style.font.family
-                font.pixelSize: Style.space(10)
-                font.bold: true
-                color: root.textMuted
-
-                Behavior on text {
-                  SequentialAnimation {
-                    NumberAnimation { target: parent; property: "opacity"; to: 0.2; duration: 150 }
-                    NumberAnimation { target: parent; property: "opacity"; to: 1.0; duration: 150 }
-                  }
-                }
-              }
-            }
-          }
-
-          // 2. URL Input Bar with embedded Clipboard Icon
-          Rectangle {
-            width: parent.width
-            height: Style.space(38)
-            color: root.insetBg
-            radius: Style.space(10)
-            border.color: urlField.activeFocus ? root.accentColor : root.insetBorder
-            border.width: 1
-
-            RowLayout {
-              anchors.fill: parent
-              anchors.leftMargin: Style.space(12)
-              anchors.rightMargin: Style.space(10)
-              spacing: Style.space(8)
-
-              // Clipboard Icon (Click to paste)
-              Text {
-                text: "\uf0ea"
-                font.family: Style.font.family
-                font.pixelSize: Style.space(14)
-                color: clipMouse.containsMouse ? root.textMain : root.textMuted
-
-                MouseArea {
-                  id: clipMouse
-                  anchors.fill: parent
-                  hoverEnabled: true
-                  cursorShape: Qt.PointingHandCursor
-                  onClicked: {
-                    root.pasteFromClipboard()
-                    urlField.forceActiveFocus()
-                  }
-                }
-              }
-
-              TextField {
-                id: urlField
-                Layout.fillWidth: true
-                background: null
-                padding: 0
-                font.family: Style.font.family
-                font.pixelSize: Style.space(12)
-                color: root.textMain
-                placeholderText: "youtube.com/watch?v=3fK2q9x..."
-                placeholderTextColor: Qt.darker(root.textMuted, 1.2)
-                text: root.inputUrl
-                onTextEdited: {
-                  root.inputUrl = text
-                  if (Downloader.isValidUrl(text)) {
-                    root.fetchMetadata(text)
-                  }
-                }
-                onAccepted: {
-                  if (root.inputUrl.length > 0) root.startDownload()
-                }
-                Keys.onDownPressed: function(event) {
-                  keyCatcher.forceActiveFocus()
-                  event.accepted = true
-                }
-                Keys.onTabPressed: function(event) {
-                  keyCatcher.forceActiveFocus()
-                  event.accepted = true
-                }
-                Keys.onEscapePressed: function(event) {
-                  if (text !== "") {
-                    text = ""
-                    root.inputUrl = ""
-                  } else {
-                    root.close()
-                  }
-                  event.accepted = true
-                }
-              }
-            }
-          }
-
-          // 3. Link Preview Card (Under URL Bar: 16:9 thumbnail + title + channel/duration)
-          Rectangle {
-            width: parent.width
-            height: previewRow.implicitHeight + Style.space(12)
-            visible: root.metadataLoading || root.videoTitle !== ""
-            color: root.insetBg
-            radius: Style.space(8)
-            border.color: root.insetBorder
-            border.width: 1
-
-            RowLayout {
-              id: previewRow
-              anchors.fill: parent
-              anchors.margins: Style.space(6)
-              spacing: Style.space(10)
-
-              // 16:9 Mini Thumbnail
-              Rectangle {
-                width: Style.space(56)
-                height: Style.space(32)
-                radius: Style.space(4)
-                color: Qt.rgba(0, 0, 0, 0.3)
-                clip: true
-
-                Image {
-                  visible: root.videoThumbnail !== ""
-                  anchors.fill: parent
-                  source: root.videoThumbnail
-                  fillMode: Image.PreserveAspectCrop
-                }
-
-                Text {
-                  visible: root.videoThumbnail === ""
-                  anchors.centerIn: parent
-                  text: root.metadataLoading ? "\uf110" : "\uf16a"
-                  font.family: Style.font.family
-                  font.pixelSize: Style.space(14)
-                  color: root.textMuted
-                }
-              }
-
-              // Metadata Text
-              ColumnLayout {
-                Layout.fillWidth: true
-                spacing: Style.space(1)
-
-                Text {
-                  Layout.fillWidth: true
-                  text: root.metadataLoading ? "Fetching video info..." : root.videoTitle
-                  color: root.textMain
-                  font.family: Style.font.family
-                  font.pixelSize: Style.space(11)
-                  font.bold: true
-                  elide: Text.ElideRight
-                }
-
-                Text {
-                  Layout.fillWidth: true
-                  visible: !root.metadataLoading && (root.videoUploader !== "" || root.videoDuration !== "")
-                  text: (root.videoUploader !== "" ? root.videoUploader : "") + (root.videoDuration !== "" ? " · " + root.videoDuration : "")
-                  color: root.textMuted
-                  font.family: Style.font.family
-                  font.pixelSize: Style.space(10)
-                  elide: Text.ElideRight
-                }
-              }
-            }
-          }
-
-          // 4. Segmented Tab Switcher: [ AUDIO ] [ VIDEO ]
-          Rectangle {
-            width: parent.width
-            height: Style.space(34)
-            color: root.insetBg
-            radius: Style.space(10)
-            border.color: root.insetBorder
-            border.width: 1
-
-            Row {
-              anchors.fill: parent
-              anchors.margins: Style.space(3)
-              spacing: Style.space(4)
-
-              // Audio Tab
-              Rectangle {
-                width: (parent.width - Style.space(4)) / 2
-                height: parent.height
-                radius: Style.space(7)
-                color: root.isAudioMode ? root.activePillBg : "transparent"
-
-                Text {
-                  anchors.centerIn: parent
-                  text: "AUDIO"
-                  font.family: Style.font.family
-                  font.pixelSize: Style.space(11)
-                  font.bold: true
-                  color: root.isAudioMode ? root.textMain : root.textMuted
-                }
-
-                MouseArea {
-                  anchors.fill: parent
-                  cursorShape: Qt.PointingHandCursor
-                  onClicked: {
-                    root.isAudioMode = true
-                    root.dropdownOpen = false
-                    keyCatcher.forceActiveFocus()
-                  }
-                }
-              }
-
-              // Video Tab
-              Rectangle {
-                width: (parent.width - Style.space(4)) / 2
-                height: parent.height
-                radius: Style.space(7)
-                color: !root.isAudioMode ? root.activePillBg : "transparent"
-
-                Text {
-                  anchors.centerIn: parent
-                  text: "VIDEO"
-                  font.family: Style.font.family
-                  font.pixelSize: Style.space(11)
-                  font.bold: true
-                  color: !root.isAudioMode ? root.textMain : root.textMuted
-                }
-
-                MouseArea {
-                  anchors.fill: parent
-                  cursorShape: Qt.PointingHandCursor
-                  onClicked: {
-                    root.isAudioMode = false
-                    root.dropdownOpen = false
-                    keyCatcher.forceActiveFocus()
-                  }
-                }
-              }
-            }
-          }
-
-          // 5. Quality Dropdown Trigger
-          Rectangle {
-            width: parent.width
-            height: Style.space(36)
-            color: root.insetBg
-            radius: Style.space(10)
-            border.color: root.dropdownOpen ? root.accentColor : root.insetBorder
-            border.width: 1
-
-            RowLayout {
-              anchors.fill: parent
-              anchors.leftMargin: Style.space(12)
-              anchors.rightMargin: Style.space(12)
-              spacing: Style.space(8)
-
-              Text {
-                text: "\uf1de"
-                font.family: Style.font.family
-                font.pixelSize: Style.space(13)
-                color: root.textMuted
-              }
-
-              Text {
-                Layout.fillWidth: true
-                text: root.currentFormat.display
-                font.family: Style.font.family
-                font.pixelSize: Style.space(12)
-                color: root.textMain
-              }
-
-              Text {
-                text: root.dropdownOpen ? "\uf077" : "\uf078"
-                font.family: Style.font.family
-                font.pixelSize: Style.space(13)
-                color: root.textMuted
-              }
-            }
-
-            MouseArea {
-              anchors.fill: parent
-              cursorShape: Qt.PointingHandCursor
-              onClicked: {
-                root.dropdownOpen = !root.dropdownOpen
-                keyCatcher.forceActiveFocus()
-              }
-            }
-          }
-
-          // 5b. Dropdown Options List
-          Column {
-            width: parent.width
-            visible: root.dropdownOpen
-            spacing: Style.space(4)
-
-            Repeater {
-              model: root.currentFormats
-
-              Rectangle {
-                required property var modelData
-                required property int index
-                width: cardColumn.width
-                height: Style.space(32)
-                radius: Style.space(7)
-                color: (root.isAudioMode ? root.selectedAudioIndex : root.selectedVideoIndex) === index
-                  ? root.activePillBg
-                  : (optMouse.containsMouse ? Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.08) : root.insetBg)
-                border.color: (root.isAudioMode ? root.selectedAudioIndex : root.selectedVideoIndex) === index
-                  ? root.accentColor
-                  : root.insetBorder
-                border.width: 1
-
-                RowLayout {
-                  anchors.fill: parent
-                  anchors.leftMargin: Style.space(12)
-                  anchors.rightMargin: Style.space(12)
-
-                  Text {
-                    text: modelData.display
-                    font.family: Style.font.family
-                    font.pixelSize: Style.space(12)
-                    color: root.textMain
-                    Layout.fillWidth: true
-                  }
-
-                  Text {
-                    text: modelData.sublabel
-                    font.family: Style.font.family
-                    font.pixelSize: Style.space(10)
-                    color: root.textMuted
-                  }
-                }
-
-                MouseArea {
-                  id: optMouse
-                  anchors.fill: parent
-                  hoverEnabled: true
-                  cursorShape: Qt.PointingHandCursor
-                  onClicked: {
-                    if (root.isAudioMode) root.selectedAudioIndex = index
-                    else root.selectedVideoIndex = index
-                    root.dropdownOpen = false
-                    keyCatcher.forceActiveFocus()
-                  }
-                }
-              }
-            }
-          }
-
-          // 6. Download Action Button (matches ytdl.html DOWNLOAD row)
-          Rectangle {
-            width: parent.width
-            height: Style.space(38)
-            radius: Style.space(10)
-            color: dlMouse.containsMouse ? Qt.lighter(root.activePillBg, 1.2) : root.activePillBg
-            border.color: dlMouse.containsMouse ? root.accentColor : Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.18)
-            border.width: 1
-
-            RowLayout {
-              anchors.centerIn: parent
-              spacing: Style.space(8)
-
-              Text {
-                text: "\uf019"
-                font.family: Style.font.family
-                font.pixelSize: Style.space(14)
-                color: root.textMain
-              }
-
-              Text {
-                text: "DOWNLOAD"
-                font.family: Style.font.family
-                font.pixelSize: Style.space(12)
-                font.bold: true
-                color: root.textMain
-              }
-            }
-
-            MouseArea {
-              id: dlMouse
-              anchors.fill: parent
-              hoverEnabled: true
-              cursorShape: Qt.PointingHandCursor
-              onClicked: root.startDownload()
-            }
-          }
-
-          // 7. STATUS Section (Visible ONLY when downloading)
-          Column {
-            width: parent.width
-            visible: ytdlp.running
-            spacing: Style.space(8)
-
             Text {
-              text: "STATUS"
+              text: root.currentTagline
               font.family: Style.font.family
               font.pixelSize: Style.space(10)
               font.bold: true
               color: root.textMuted
-            }
 
-            // 2x2 Grid (State, Speed, Size, ETA)
-            Column {
-              width: parent.width
-              spacing: Style.space(10)
-
-              // Row 1: State & Speed
-              Row {
-                width: parent.width
-
-                Column {
-                  width: parent.width / 2
-                  spacing: Style.space(2)
-                  Text {
-                    text: "State"
-                    font.family: Style.font.family
-                    font.pixelSize: Style.space(10)
-                    color: root.textMuted
-                  }
-                  Text {
-                    text: ytdlp.stateText
-                    font.family: Style.font.family
-                    font.pixelSize: Style.space(13)
-                    color: root.textMain
-                  }
-                }
-
-                Column {
-                  width: parent.width / 2
-                  spacing: Style.space(2)
-                  Text {
-                    text: "Speed"
-                    font.family: Style.font.family
-                    font.pixelSize: Style.space(10)
-                    color: root.textMuted
-                  }
-                  Text {
-                    text: ytdlp.speedText !== "" ? ytdlp.speedText : "—"
-                    font.family: Style.font.family
-                    font.pixelSize: Style.space(13)
-                    color: root.textMain
-                  }
+              Behavior on text {
+                SequentialAnimation {
+                  NumberAnimation { target: parent; property: "opacity"; to: 0.2; duration: 150 }
+                  NumberAnimation { target: parent; property: "opacity"; to: 1.0; duration: 150 }
                 }
               }
+            }
+          }
+        }
 
-              // Row 2: Size & ETA
-              Row {
-                width: parent.width
+        // 2. URL Input Bar with embedded Clipboard Icon
+        Rectangle {
+          width: parent.width
+          height: Style.space(38)
+          color: root.insetBg
+          radius: Style.space(10)
+          border.color: urlField.activeFocus ? root.accentColor : root.insetBorder
+          border.width: 1
 
-                Column {
-                  width: parent.width / 2
-                  spacing: Style.space(2)
-                  Text {
-                    text: "Size"
-                    font.family: Style.font.family
-                    font.pixelSize: Style.space(10)
-                    color: root.textMuted
-                  }
-                  Text {
-                    text: ytdlp.sizeText !== "" ? ytdlp.sizeText : "—"
-                    font.family: Style.font.family
-                    font.pixelSize: Style.space(13)
-                    color: root.textMain
-                  }
-                }
+          RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: Style.space(12)
+            anchors.rightMargin: Style.space(10)
+            spacing: Style.space(8)
 
-                Column {
-                  width: parent.width / 2
-                  spacing: Style.space(2)
-                  Text {
-                    text: "ETA"
-                    font.family: Style.font.family
-                    font.pixelSize: Style.space(10)
-                    color: root.textMuted
-                  }
-                  Text {
-                    text: ytdlp.etaText !== "" ? ytdlp.etaText : "—"
-                    font.family: Style.font.family
-                    font.pixelSize: Style.space(13)
-                    color: root.textMain
-                  }
+            // Clipboard Icon (Click to paste)
+            Text {
+              text: "\uf0ea"
+              font.family: Style.font.family
+              font.pixelSize: Style.space(14)
+              color: clipMouse.containsMouse ? root.textMain : root.textMuted
+
+              MouseArea {
+                id: clipMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                  root.pasteFromClipboard()
+                  urlField.forceActiveFocus()
                 }
               }
             }
 
-            // Slim Horizontal Progress Bar
+            TextField {
+              id: urlField
+              Layout.fillWidth: true
+              background: null
+              padding: 0
+              font.family: Style.font.family
+              font.pixelSize: Style.space(12)
+              color: root.textMain
+              placeholderText: "youtube.com/watch?v=3fK2q9x..."
+              placeholderTextColor: Qt.darker(root.textMuted, 1.2)
+              text: root.inputUrl
+              onTextEdited: {
+                root.inputUrl = text
+                if (Downloader.isValidUrl(text)) {
+                  root.fetchMetadata(text)
+                }
+              }
+              onAccepted: {
+                if (root.inputUrl.length > 0) root.startDownload()
+              }
+              Keys.onDownPressed: function(event) {
+                keyCatcher.forceActiveFocus()
+                event.accepted = true
+              }
+              Keys.onTabPressed: function(event) {
+                keyCatcher.forceActiveFocus()
+                event.accepted = true
+              }
+              Keys.onEscapePressed: function(event) {
+                if (text !== "") {
+                  text = ""
+                  root.inputUrl = ""
+                } else {
+                  root.close()
+                }
+                event.accepted = true
+              }
+            }
+          }
+        }
+
+        // 3. Link Preview Card (Under URL Bar: 16:9 thumbnail + title + channel/duration)
+        Rectangle {
+          width: parent.width
+          height: previewRow.implicitHeight + Style.space(12)
+          visible: root.metadataLoading || root.videoTitle !== ""
+          color: root.insetBg
+          radius: Style.space(8)
+          border.color: root.insetBorder
+          border.width: 1
+
+          RowLayout {
+            id: previewRow
+            anchors.fill: parent
+            anchors.margins: Style.space(6)
+            spacing: Style.space(10)
+
+            // 16:9 Mini Thumbnail
             Rectangle {
+              width: Style.space(56)
+              height: Style.space(32)
+              radius: Style.space(4)
+              color: Qt.rgba(0, 0, 0, 0.3)
+              clip: true
+
+              Image {
+                visible: root.videoThumbnail !== ""
+                anchors.fill: parent
+                source: root.videoThumbnail
+                fillMode: Image.PreserveAspectCrop
+              }
+
+              Text {
+                visible: root.videoThumbnail === ""
+                anchors.centerIn: parent
+                text: root.metadataLoading ? "\uf110" : "\uf16a"
+                font.family: Style.font.family
+                font.pixelSize: Style.space(14)
+                color: root.textMuted
+              }
+            }
+
+            // Metadata Text
+            ColumnLayout {
+              Layout.fillWidth: true
+              spacing: Style.space(1)
+
+              Text {
+                Layout.fillWidth: true
+                text: root.metadataLoading ? "Fetching video info..." : root.videoTitle
+                color: root.textMain
+                font.family: Style.font.family
+                font.pixelSize: Style.space(11)
+                font.bold: true
+                elide: Text.ElideRight
+              }
+
+              Text {
+                Layout.fillWidth: true
+                visible: !root.metadataLoading && (root.videoUploader !== "" || root.videoDuration !== "")
+                text: (root.videoUploader !== "" ? root.videoUploader : "") + (root.videoDuration !== "" ? " · " + root.videoDuration : "")
+                color: root.textMuted
+                font.family: Style.font.family
+                font.pixelSize: Style.space(10)
+                elide: Text.ElideRight
+              }
+            }
+          }
+        }
+
+        // 4. Segmented Tab Switcher: [ AUDIO ] [ VIDEO ]
+        Rectangle {
+          width: parent.width
+          height: Style.space(34)
+          color: root.insetBg
+          radius: Style.space(10)
+          border.color: root.insetBorder
+          border.width: 1
+
+          Row {
+            anchors.fill: parent
+            anchors.margins: Style.space(3)
+            spacing: Style.space(4)
+
+            // Audio Tab
+            Rectangle {
+              width: (parent.width - Style.space(4)) / 2
+              height: parent.height
+              radius: Style.space(7)
+              color: root.isAudioMode ? root.activePillBg : "transparent"
+
+              Text {
+                anchors.centerIn: parent
+                text: "AUDIO"
+                font.family: Style.font.family
+                font.pixelSize: Style.space(11)
+                font.bold: true
+                color: root.isAudioMode ? root.textMain : root.textMuted
+              }
+
+              MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                  root.isAudioMode = true
+                  root.dropdownOpen = false
+                  keyCatcher.forceActiveFocus()
+                }
+              }
+            }
+
+            // Video Tab
+            Rectangle {
+              width: (parent.width - Style.space(4)) / 2
+              height: parent.height
+              radius: Style.space(7)
+              color: !root.isAudioMode ? root.activePillBg : "transparent"
+
+              Text {
+                anchors.centerIn: parent
+                text: "VIDEO"
+                font.family: Style.font.family
+                font.pixelSize: Style.space(11)
+                font.bold: true
+                color: !root.isAudioMode ? root.textMain : root.textMuted
+              }
+
+              MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                  root.isAudioMode = false
+                  root.dropdownOpen = false
+                  keyCatcher.forceActiveFocus()
+                }
+              }
+            }
+          }
+        }
+
+        // 5. Quality Dropdown Trigger
+        Rectangle {
+          width: parent.width
+          height: Style.space(36)
+          color: root.insetBg
+          radius: Style.space(10)
+          border.color: root.dropdownOpen ? root.accentColor : root.insetBorder
+          border.width: 1
+
+          RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: Style.space(12)
+            anchors.rightMargin: Style.space(12)
+            spacing: Style.space(8)
+
+            Text {
+              text: "\uf1de"
+              font.family: Style.font.family
+              font.pixelSize: Style.space(13)
+              color: root.textMuted
+            }
+
+            Text {
+              Layout.fillWidth: true
+              text: root.currentFormat.display
+              font.family: Style.font.family
+              font.pixelSize: Style.space(12)
+              color: root.textMain
+            }
+
+            Text {
+              text: root.dropdownOpen ? "\uf077" : "\uf078"
+              font.family: Style.font.family
+              font.pixelSize: Style.space(13)
+              color: root.textMuted
+            }
+          }
+
+          MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: {
+              root.dropdownOpen = !root.dropdownOpen
+              keyCatcher.forceActiveFocus()
+            }
+          }
+        }
+
+        // 5b. Dropdown Options List
+        Column {
+          width: parent.width
+          visible: root.dropdownOpen
+          spacing: Style.space(4)
+
+          Repeater {
+            model: root.currentFormats
+
+            Rectangle {
+              required property var modelData
+              required property int index
+              width: cardColumn.width
+              height: Style.space(32)
+              radius: Style.space(7)
+              color: (root.isAudioMode ? root.selectedAudioIndex : root.selectedVideoIndex) === index
+                ? root.activePillBg
+                : (optMouse.containsMouse ? Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.08) : root.insetBg)
+              border.color: (root.isAudioMode ? root.selectedAudioIndex : root.selectedVideoIndex) === index
+                ? root.accentColor
+                : root.insetBorder
+              border.width: 1
+
+              RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: Style.space(12)
+                anchors.rightMargin: Style.space(12)
+
+                Text {
+                  text: modelData.display
+                  font.family: Style.font.family
+                  font.pixelSize: Style.space(12)
+                  color: root.textMain
+                  Layout.fillWidth: true
+                }
+
+                Text {
+                  text: modelData.sublabel
+                  font.family: Style.font.family
+                  font.pixelSize: Style.space(10)
+                  color: root.textMuted
+                }
+              }
+
+              MouseArea {
+                id: optMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                  if (root.isAudioMode) root.selectedAudioIndex = index
+                  else root.selectedVideoIndex = index
+                  root.dropdownOpen = false
+                  keyCatcher.forceActiveFocus()
+                }
+              }
+            }
+          }
+        }
+
+        // 6. Download Action Button (matches ytdl.html DOWNLOAD row)
+        Rectangle {
+          width: parent.width
+          height: Style.space(38)
+          radius: Style.space(10)
+          color: dlMouse.containsMouse ? Qt.lighter(root.activePillBg, 1.2) : root.activePillBg
+          border.color: dlMouse.containsMouse ? root.accentColor : Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.18)
+          border.width: 1
+
+          RowLayout {
+            anchors.centerIn: parent
+            spacing: Style.space(8)
+
+            Text {
+              text: "\uf019"
+              font.family: Style.font.family
+              font.pixelSize: Style.space(14)
+              color: root.textMain
+            }
+
+            Text {
+              text: "DOWNLOAD"
+              font.family: Style.font.family
+              font.pixelSize: Style.space(12)
+              font.bold: true
+              color: root.textMain
+            }
+          }
+
+          MouseArea {
+            id: dlMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: root.startDownload()
+          }
+        }
+
+        // 7. STATUS Section (Visible ONLY when downloading)
+        Column {
+          width: parent.width
+          visible: ytdlp.running
+          spacing: Style.space(8)
+
+          Text {
+            text: "STATUS"
+            font.family: Style.font.family
+            font.pixelSize: Style.space(10)
+            font.bold: true
+            color: root.textMuted
+          }
+
+          // 2x2 Grid (State, Speed, Size, ETA)
+          Column {
+            width: parent.width
+            spacing: Style.space(10)
+
+            // Row 1: State & Speed
+            Row {
               width: parent.width
-              height: Style.space(4)
-              radius: Style.space(2)
-              color: root.insetBorder
 
-              Rectangle {
-                height: parent.height
-                radius: parent.radius
-                color: root.accentColor
-                width: Math.max(0, Math.min(parent.width, parent.width * (ytdlp.progress / 100)))
+              Column {
+                width: parent.width / 2
+                spacing: Style.space(2)
+                Text {
+                  text: "State"
+                  font.family: Style.font.family
+                  font.pixelSize: Style.space(10)
+                  color: root.textMuted
+                }
+                Text {
+                  text: ytdlp.stateText
+                  font.family: Style.font.family
+                  font.pixelSize: Style.space(13)
+                  color: root.textMain
+                }
+              }
 
-                Behavior on width {
-                  NumberAnimation { duration: 100 }
+              Column {
+                width: parent.width / 2
+                spacing: Style.space(2)
+                Text {
+                  text: "Speed"
+                  font.family: Style.font.family
+                  font.pixelSize: Style.space(10)
+                  color: root.textMuted
+                }
+                Text {
+                  text: ytdlp.speedText !== "" ? ytdlp.speedText : "—"
+                  font.family: Style.font.family
+                  font.pixelSize: Style.space(13)
+                  color: root.textMain
+                }
+              }
+            }
+
+            // Row 2: Size & ETA
+            Row {
+              width: parent.width
+
+              Column {
+                width: parent.width / 2
+                spacing: Style.space(2)
+                Text {
+                  text: "Size"
+                  font.family: Style.font.family
+                  font.pixelSize: Style.space(10)
+                  color: root.textMuted
+                }
+                Text {
+                  text: ytdlp.sizeText !== "" ? ytdlp.sizeText : "—"
+                  font.family: Style.font.family
+                  font.pixelSize: Style.space(13)
+                  color: root.textMain
+                }
+              }
+
+              Column {
+                width: parent.width / 2
+                spacing: Style.space(2)
+                Text {
+                  text: "ETA"
+                  font.family: Style.font.family
+                  font.pixelSize: Style.space(10)
+                  color: root.textMuted
+                }
+                Text {
+                  text: ytdlp.etaText !== "" ? ytdlp.etaText : "—"
+                  font.family: Style.font.family
+                  font.pixelSize: Style.space(13)
+                  color: root.textMain
                 }
               }
             }
           }
 
-          // 8. RECENT Section (Visible when completed items exist in this session)
-          Column {
+          // Slim Horizontal Progress Bar
+          Rectangle {
             width: parent.width
-            visible: root.recentDownloads.length > 0 || root.queue.length > 0
-            spacing: Style.space(8)
+            height: Style.space(4)
+            radius: Style.space(2)
+            color: root.insetBorder
 
-            RowLayout {
-              width: parent.width
+            Rectangle {
+              height: parent.height
+              radius: parent.radius
+              color: root.accentColor
+              width: Math.max(0, Math.min(parent.width, parent.width * (ytdlp.progress / 100)))
 
-              Text {
-                text: "RECENT"
-                font.family: Style.font.family
-                font.pixelSize: Style.space(10)
-                font.bold: true
-                color: root.textMuted
-                Layout.fillWidth: true
+              Behavior on width {
+                NumberAnimation { duration: 100 }
               }
+            }
+          }
+        }
 
-              Text {
-                text: "Clear"
-                font.family: Style.font.family
-                font.pixelSize: Style.space(10)
-                color: clearMouse.containsMouse ? root.textMain : root.textMuted
+        // 8. RECENT Section (Visible when completed items exist in this session)
+        Column {
+          width: parent.width
+          visible: root.recentDownloads.length > 0 || root.queue.length > 0
+          spacing: Style.space(8)
 
-                MouseArea {
-                  id: clearMouse
-                  anchors.fill: parent
-                  hoverEnabled: true
-                  cursorShape: Qt.PointingHandCursor
-                  onClicked: {
-                    root.recentDownloads = []
-                    root.queue = []
-                  }
+          RowLayout {
+            width: parent.width
+
+            Text {
+              text: "RECENT"
+              font.family: Style.font.family
+              font.pixelSize: Style.space(10)
+              font.bold: true
+              color: root.textMuted
+              Layout.fillWidth: true
+            }
+
+            Text {
+              text: "Clear"
+              font.family: Style.font.family
+              font.pixelSize: Style.space(10)
+              color: clearMouse.containsMouse ? root.textMain : root.textMuted
+
+              MouseArea {
+                id: clearMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                  root.recentDownloads = []
+                  root.queue = []
                 }
               }
             }
+          }
 
-            // Queue Items
-            Repeater {
-              model: root.queue
+          // Queue Items
+          Repeater {
+            model: root.queue
 
-              Rectangle {
-                required property var modelData
-                required property int index
-                width: cardColumn.width
-                height: Style.space(34)
-                color: root.insetBg
-                radius: Style.space(9)
-                border.color: root.insetBorder
-                border.width: 1
+            Rectangle {
+              required property var modelData
+              required property int index
+              width: cardColumn.width
+              height: Style.space(34)
+              color: root.insetBg
+              radius: Style.space(9)
+              border.color: root.insetBorder
+              border.width: 1
 
-                RowLayout {
-                  anchors.fill: parent
-                  anchors.leftMargin: Style.space(10)
-                  anchors.rightMargin: Style.space(10)
-                  spacing: Style.space(8)
+              RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: Style.space(10)
+                anchors.rightMargin: Style.space(10)
+                spacing: Style.space(8)
 
-                  Text {
-                    text: "\uf110"
-                    font.family: Style.font.family
-                    font.pixelSize: Style.space(13)
-                    color: root.textMuted
-                  }
+                Text {
+                  text: "\uf110"
+                  font.family: Style.font.family
+                  font.pixelSize: Style.space(13)
+                  color: root.textMuted
+                }
 
-                  Text {
-                    text: modelData.title || modelData.url
-                    font.family: Style.font.family
-                    font.pixelSize: Style.space(12)
-                    color: root.textMain
-                    Layout.fillWidth: true
-                    elide: Text.ElideRight
-                  }
+                Text {
+                  text: modelData.title || modelData.url
+                  font.family: Style.font.family
+                  font.pixelSize: Style.space(12)
+                  color: root.textMain
+                  Layout.fillWidth: true
+                  elide: Text.ElideRight
+                }
 
-                  Text {
-                    text: "Queued"
-                    font.family: Style.font.family
-                    font.pixelSize: Style.space(10)
-                    color: root.textMuted
-                  }
+                Text {
+                  text: "Queued"
+                  font.family: Style.font.family
+                  font.pixelSize: Style.space(10)
+                  color: root.textMuted
                 }
               }
             }
+          }
 
-            // Recent Download Item Card
-            Repeater {
-              model: root.recentDownloads
+          // Recent Download Item Card
+          Repeater {
+            model: root.recentDownloads
 
-              Rectangle {
-                required property var modelData
-                width: cardColumn.width
-                height: Style.space(34)
-                color: recentMouse.containsMouse ? Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.08) : root.insetBg
-                radius: Style.space(9)
-                border.color: root.insetBorder
-                border.width: 1
+            Rectangle {
+              required property var modelData
+              width: cardColumn.width
+              height: Style.space(34)
+              color: recentMouse.containsMouse ? Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.08) : root.insetBg
+              radius: Style.space(9)
+              border.color: root.insetBorder
+              border.width: 1
 
-                RowLayout {
-                  anchors.fill: parent
-                  anchors.leftMargin: Style.space(10)
-                  anchors.rightMargin: Style.space(10)
-                  spacing: Style.space(8)
+              RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: Style.space(10)
+                anchors.rightMargin: Style.space(10)
+                spacing: Style.space(8)
 
-                  Text {
-                    text: modelData.isAudio ? "\uf025" : "\uf03d"
-                    font.family: Style.font.family
-                    font.pixelSize: Style.space(13)
-                    color: root.textMuted
-                  }
-
-                  Text {
-                    text: modelData.title
-                    font.family: Style.font.family
-                    font.pixelSize: Style.space(12)
-                    color: root.textMain
-                    Layout.fillWidth: true
-                    elide: Text.ElideRight
-                  }
-
-                  Text {
-                    text: "\uf00c"
-                    font.family: Style.font.family
-                    font.pixelSize: Style.space(13)
-                    color: root.accentColor
-                  }
+                Text {
+                  text: modelData.isAudio ? "\uf025" : "\uf03d"
+                  font.family: Style.font.family
+                  font.pixelSize: Style.space(13)
+                  color: root.textMuted
                 }
 
-                MouseArea {
-                  id: recentMouse
-                  anchors.fill: parent
-                  hoverEnabled: true
-                  cursorShape: Qt.PointingHandCursor
-                  onClicked: xdgProc.openTarget(modelData.filePath)
+                Text {
+                  text: modelData.title
+                  font.family: Style.font.family
+                  font.pixelSize: Style.space(12)
+                  color: root.textMain
+                  Layout.fillWidth: true
+                  elide: Text.ElideRight
                 }
+
+                Text {
+                  text: "\uf00c"
+                  font.family: Style.font.family
+                  font.pixelSize: Style.space(13)
+                  color: root.accentColor
+                }
+              }
+
+              MouseArea {
+                id: recentMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: xdgProc.openTarget(modelData.filePath)
               }
             }
           }

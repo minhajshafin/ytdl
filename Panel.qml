@@ -420,7 +420,9 @@ Panel {
           height: Style.space(38)
           color: root.insetBg
           radius: Style.space(10)
-          border.color: urlField.activeFocus ? root.accentColor : root.insetBorder
+          border.color: (root.inputUrl.trim() !== "" && !Downloader.isValidUrl(root.inputUrl))
+            ? Color.urgent
+            : (urlField.activeFocus ? root.accentColor : root.insetBorder)
           border.width: 1
 
           RowLayout {
@@ -487,6 +489,20 @@ Panel {
               }
             }
           }
+        }
+
+        // Invalid URL notice
+        Text {
+          width: parent.width
+          visible: root.inputUrl.trim() !== "" && !Downloader.isValidUrl(root.inputUrl)
+          text: root.inputUrl.trim().indexOf("http://") === 0
+            ? "Insecure link: requires https:// (e.g. https://youtube.com/...)"
+            : "Please enter a valid https:// media link (YouTube, SoundCloud, Vimeo, etc.)"
+          font.family: Style.font.family
+          font.pixelSize: Style.space(11)
+          color: Color.urgent
+          wrapMode: Text.WordWrap
+          leftPadding: Style.space(4)
         }
 
         // 3. Link Preview Card (Under URL Bar: 16:9 thumbnail + title + channel/duration)

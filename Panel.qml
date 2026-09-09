@@ -17,6 +17,11 @@ Panel {
   property var hostWidget: null
 
   property string inputUrl: ""
+  onInputUrlChanged: {
+    if (inputUrl.trim() === "") {
+      clearMetadata()
+    }
+  }
   property bool isAudioMode: true // Default: AUDIO mode
   property int selectedAudioIndex: 0
   property int selectedVideoIndex: 0
@@ -99,8 +104,21 @@ Panel {
     checkClipboard()
   }
 
+  function clearMetadata() {
+    if (metaProc.running) metaProc.running = false
+    if (fastMetaProc.running) fastMetaProc.running = false
+    root.metadataLoading = false
+    root.videoTitle = ""
+    root.videoUploader = ""
+    root.videoDuration = ""
+    root.videoThumbnail = ""
+  }
+
   function fetchMetadata(url) {
-    if (!url || !Downloader.isValidUrl(url)) return
+    if (!url || !Downloader.isValidUrl(url)) {
+      clearMetadata()
+      return
+    }
     if (metaProc.running) metaProc.running = false
     if (fastMetaProc.running) fastMetaProc.running = false
     root.metadataLoading = true
@@ -154,10 +172,7 @@ Panel {
     }
 
     root.inputUrl = ""
-    root.videoTitle = ""
-    root.videoUploader = ""
-    root.videoDuration = ""
-    root.videoThumbnail = ""
+    root.clearMetadata()
     root.dropdownOpen = false
   }
 
@@ -191,6 +206,7 @@ Panel {
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
+        if (root.inputUrl.trim() === "" || !Downloader.isValidUrl(root.inputUrl)) return
         try {
           var data = JSON.parse(String(text || "").trim())
           if (data && data.title) {
@@ -209,6 +225,7 @@ Panel {
       waitForEnd: true
       onStreamFinished: {
         root.metadataLoading = false
+        if (root.inputUrl.trim() === "" || !Downloader.isValidUrl(root.inputUrl)) return
         var raw = String(text || "").trim()
         if (raw !== "") {
           var parts = raw.split("\t")
@@ -463,8 +480,12 @@ Panel {
               text: root.inputUrl
               onTextEdited: {
                 root.inputUrl = text
-                if (Downloader.isValidUrl(text)) {
+                if (text.trim() === "") {
+                  root.clearMetadata()
+                } else if (Downloader.isValidUrl(text)) {
                   root.fetchMetadata(text)
+                } else {
+                  root.clearMetadata()
                 }
               }
               onAccepted: {
@@ -482,6 +503,7 @@ Panel {
                 if (text !== "") {
                   text = ""
                   root.inputUrl = ""
+                  root.clearMetadata()
                 } else {
                   root.close()
                 }
@@ -509,7 +531,7 @@ Panel {
         Rectangle {
           width: parent.width
           height: previewRow.implicitHeight + Style.space(12)
-          visible: root.metadataLoading || root.videoTitle !== ""
+          visible: root.inputUrl.trim() !== "" && Downloader.isValidUrl(root.inputUrl) && (root.metadataLoading || root.videoTitle !== "")
           color: root.insetBg
           radius: Style.space(8)
           border.color: root.insetBorder

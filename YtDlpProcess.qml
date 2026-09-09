@@ -15,8 +15,94 @@ Item {
   property var currentTask: null
   property string savedPath: ""
   property string errorText: ""
+  property var diagnosticLines: []
+  property int diagnosticCharCount: 0
+  property int activePgid: 0
 
   signal finished(var task, bool success, string filePath, string errorMsg)
+
+  Process {
+    id: killTermProc
+    function killGroup(pgid) {
+      if (!pgid || pgid <= 0) return
+      command = ["kill", "-TERM", "--", "-" + pgid]
+      running = true
+    }
+  }
+
+  Process {
+    id: killKillProc
+    function killGroup(pgid) {
+      if (!pgid || pgid <= 0) return
+      command = ["kill", "-KILL", "--", "-" + pgid]
+      running = true
+    }
+  }
+
+  Timer {
+    id: killEscalationTimer
+    interval: 1000
+    repeat: false
+    property int targetPgid: 0
+    onTriggered: {
+      if (targetPgid > 0) {
+        killKillProc.killGroup(targetPgid)
+        targetPgid = 0
+      }
+    }
+  }
+
+  Process {
+    id: destructionProc
+  }
+
+  Component.onDestruction: {
+    var pgid = root.activePgid
+    root.activePgid = 0
+    killEscalationTimer.stop()
+    if (pgid > 0) {
+      proc.running = false
+      destructionProc.command = ["sh", "-c", "kill -TERM -- -" + pgid + " 2>/dev/null; sleep 0.5; kill -KILL -- -" + pgid + " 2>/dev/null &"]
+      destructionProc.running = true
+    }
+  }
+
+  function appendDiagnostic(rawLine) {
+    if (!rawLine) return
+    var str = String(rawLine).trim()
+    if (str === "") return
+
+    // Cap single line length
+    if (str.length > 512) {
+      str = str.substring(0, 512) + "…"
+    }
+
+    var lines = root.diagnosticLines.slice()
+    lines.push(str)
+    var totalChars = root.diagnosticCharCount + str.length
+
+    // Strictly bounded buffer: max 15 lines and max 2048 chars
+    while (lines.length > 15 || totalChars > 2048) {
+      var removed = lines.shift()
+      totalChars -= (removed ? removed.length : 0)
+    }
+
+    root.diagnosticLines = lines
+    root.diagnosticCharCount = Math.max(0, totalChars)
+  }
+
+  function getDiagnosticSummary() {
+    if (!root.diagnosticLines || root.diagnosticLines.length === 0) return ""
+
+    for (var i = root.diagnosticLines.length - 1; i >= 0; i--) {
+      var l = root.diagnosticLines[i]
+      if (l.indexOf("ERROR:") !== -1) {
+        return l
+      }
+    }
+
+    return root.diagnosticLines[root.diagnosticLines.length - 1]
+  }
 
   function formatEta(raw) {
     if (!raw || raw === "N/A" || raw === "NA") return ""
@@ -47,8 +133,12 @@ Item {
     etaText = ""
     savedPath = ""
     errorText = ""
+    diagnosticLines = []
+    diagnosticCharCount = 0
+    activePgid = 0
 
     var cmd = [
+      "setsid",
       "yt-dlp",
       "--no-playlist",
       "-N", "4",
@@ -76,19 +166,43 @@ Item {
   }
 
   function cancel() {
+    var pgid = root.activePgid
+    root.activePgid = 0
+
     if (proc.running) {
       stateText = "Cancelled"
       proc.running = false
-      if (currentTask) {
-        var t = currentTask
-        currentTask = null
-        finished(t, false, "", "Cancelled by user")
-      }
+    }
+
+    if (pgid > 0) {
+      killTermProc.killGroup(pgid)
+      killEscalationTimer.targetPgid = pgid
+      killEscalationTimer.restart()
+    }
+
+    diagnosticLines = []
+    diagnosticCharCount = 0
+
+    if (currentTask) {
+      var t = currentTask
+      currentTask = null
+      finished(t, false, "", "Cancelled by user")
     }
   }
 
   Process {
     id: proc
+
+    onStarted: {
+      if (proc.processId) {
+        root.activePgid = proc.processId
+      }
+    }
+    onProcessIdChanged: {
+      if (proc.processId) {
+        root.activePgid = proc.processId
+      }
+    }
 
     stdout: SplitParser {
       onRead: function(line) {
@@ -118,15 +232,17 @@ Item {
       }
     }
 
-    stderr: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        var err = String(text || "").trim()
-        if (err !== "") root.errorText = err
+    stderr: SplitParser {
+      onRead: function(line) {
+        root.appendDiagnostic(line)
       }
     }
 
     onExited: function(exitCode) {
+      killEscalationTimer.stop()
+      killEscalationTimer.targetPgid = 0
+      root.activePgid = 0
+
       var task = root.currentTask
       root.currentTask = null
       if (!task) return
@@ -137,7 +253,9 @@ Item {
         root.finished(task, true, root.savedPath, "")
       } else {
         root.stateText = "Failed"
-        root.finished(task, false, "", root.errorText || ("yt-dlp failed (code " + exitCode + ")"))
+        var diag = root.getDiagnosticSummary()
+        root.errorText = diag
+        root.finished(task, false, "", diag || ("yt-dlp failed (code " + exitCode + ")"))
       }
     }
   }

@@ -89,28 +89,153 @@ var TAGLINES = [
   "DIGITAL KLEPTOMANIA"
 ];
 
+var ALLOWED_DOMAINS = [
+  "youtube.com",
+  "youtu.be",
+  "soundcloud.com",
+  "vimeo.com",
+  "tiktok.com",
+  "twitch.tv",
+  "twitter.com",
+  "x.com",
+  "reddit.com",
+  "instagram.com",
+  "facebook.com"
+];
+
+function isPrivateOrNonPublicHost(host) {
+  if (!host || typeof host !== "string") return true;
+
+  // Single-label / unqualified hostnames (e.g. router, nas, intranet)
+  if (host.indexOf(".") === -1 && host !== "localhost") {
+    return true;
+  }
+
+  if (host === "localhost" || host.endsWith(".localhost") ||
+      host.endsWith(".local") || host.endsWith(".internal") ||
+      host.endsWith(".lan") || host.endsWith(".home.arpa") ||
+      host.endsWith(".invalid") || host.endsWith(".test") ||
+      host.endsWith(".example")) {
+    return true;
+  }
+
+  // Reject IPv4 addresses (private, loopback, link-local, multicast, etc.)
+  var ipv4Match = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (ipv4Match) {
+    var o1 = parseInt(ipv4Match[1], 10);
+    var o2 = parseInt(ipv4Match[2], 10);
+    var o3 = parseInt(ipv4Match[3], 10);
+    var o4 = parseInt(ipv4Match[4], 10);
+
+    if (o1 > 255 || o2 > 255 || o3 > 255 || o4 > 255) return true;
+    if (o1 === 0 || o1 === 127) return true; // 0.0.0.0/8 and 127.0.0.0/8 (Loopback)
+    if (o1 === 10) return true; // 10.0.0.0/8 (Private)
+    if (o1 === 172 && o2 >= 16 && o2 <= 31) return true; // 172.16.0.0/12 (Private)
+    if (o1 === 192 && o2 === 168) return true; // 192.168.0.0/16 (Private)
+    if (o1 === 169 && o2 === 254) return true; // 169.254.0.0/16 (Link-local)
+    if (o1 === 100 && o2 >= 64 && o2 <= 127) return true; // 100.64.0.0/10 (Carrier-grade NAT)
+    if (o1 >= 224) return true; // Multicast & Reserved
+    return true; // Reject raw IP destinations
+  }
+
+  // Reject IPv6 addresses
+  if (host.indexOf(":") !== -1) {
+    return true;
+  }
+
+  return false;
+}
+
+function parseUrl(urlStr) {
+  if (!urlStr || typeof urlStr !== "string") return null;
+  var trimmed = urlStr.trim();
+  if (trimmed === "") return null;
+
+  // Enforce scheme: strictly require https
+  var schemeMatch = trimmed.match(/^(https):\/\/([^\/\?#]+)(?:([\/\?#].*))?$/i);
+  if (!schemeMatch) return null;
+
+  var scheme = schemeMatch[1].toLowerCase();
+  var authority = schemeMatch[2];
+  var path = schemeMatch[3] || "";
+
+  // Reject user credentials (@ in authority)
+  if (authority.indexOf("@") !== -1) return null;
+
+  var host = "";
+  var port = "";
+
+  if (authority.charAt(0) === "[") {
+    var closeBracket = authority.indexOf("]");
+    if (closeBracket === -1) return null;
+    host = authority.substring(1, closeBracket).toLowerCase();
+    var portPart = authority.substring(closeBracket + 1);
+    if (portPart.length > 0) {
+      if (portPart.charAt(0) !== ":") return null;
+      port = portPart.substring(1);
+      if (!port.match(/^\d+$/)) return null;
+    }
+  } else {
+    var colonIdx = authority.indexOf(":");
+    if (colonIdx !== -1) {
+      host = authority.substring(0, colonIdx).toLowerCase();
+      port = authority.substring(colonIdx + 1);
+      if (!port.match(/^\d+$/)) return null;
+    } else {
+      host = authority.toLowerCase();
+    }
+  }
+
+  // Strip trailing root dots
+  while (host.length > 1 && host.charAt(host.length - 1) === ".") {
+    host = host.substring(0, host.length - 1);
+  }
+
+  if (host === "") return null;
+
+  return {
+    scheme: scheme,
+    host: host,
+    port: port,
+    path: path
+  };
+}
+
 function isValidUrl(str) {
-  if (!str || typeof str !== "string") return false;
-  var trimmed = str.trim();
-  if (!trimmed.match(/^https?:\/\//i)) return false;
-  return (
-    trimmed.indexOf("youtube.com") !== -1 ||
-    trimmed.indexOf("youtu.be") !== -1 ||
-    trimmed.indexOf("soundcloud.com") !== -1 ||
-    trimmed.indexOf("vimeo.com") !== -1 ||
-    trimmed.indexOf("tiktok.com") !== -1 ||
-    trimmed.indexOf("twitch.tv") !== -1 ||
-    trimmed.indexOf("twitter.com") !== -1 ||
-    trimmed.indexOf("x.com") !== -1 ||
-    trimmed.indexOf("reddit.com") !== -1 ||
-    trimmed.indexOf("instagram.com") !== -1 ||
-    trimmed.indexOf("facebook.com") !== -1
-  );
+  var parsed = parseUrl(str);
+  if (!parsed) return false;
+
+  if (isPrivateOrNonPublicHost(parsed.host)) {
+    return false;
+  }
+
+  // Enforce label-bound suffix allowlisting
+  for (var i = 0; i < ALLOWED_DOMAINS.length; i++) {
+    var domain = ALLOWED_DOMAINS[i];
+    if (parsed.host === domain || parsed.host.endsWith("." + domain)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function extractYoutubeId(url) {
-  if (!url || typeof url !== "string") return "";
-  var m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|shorts\/|watch\?v=|watch\?.+&v=))([\w-]{11})/i);
+  var parsed = parseUrl(url);
+  if (!parsed) return "";
+
+  var host = parsed.host;
+  var isYoutube = (host === "youtube.com" || host.endsWith(".youtube.com"));
+  var isYoutuBe = (host === "youtu.be");
+
+  if (!isYoutube && !isYoutuBe) return "";
+
+  if (isYoutuBe) {
+    var ym = parsed.path.match(/^\/([\w-]{11})/i);
+    return ym ? ym[1] : "";
+  }
+
+  var m = parsed.path.match(/(?:\/(?:embed|v|shorts)\/|watch\?.*[?&]v=|watch\?v=)([\w-]{11})/i);
   return m ? m[1] : "";
 }
 
@@ -121,7 +246,8 @@ function getInstantThumbnail(url) {
 
 function cleanUrl(str) {
   if (!str || typeof str !== "string") return "";
-  return str.trim();
+  var trimmed = str.trim();
+  return isValidUrl(trimmed) ? trimmed : "";
 }
 
 function parseProgress(line) {

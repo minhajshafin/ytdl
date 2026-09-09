@@ -71,6 +71,13 @@ Panel {
     else open()
   }
 
+  Component.onDestruction: {
+    if (ytdlp.running) ytdlp.cancel()
+    if (metaProc.running) metaProc.running = false
+    if (fastMetaProc.running) fastMetaProc.running = false
+    if (clipboardProc.running) clipboardProc.running = false
+  }
+
   function cycleTagline() {
     taglineIndex = (taglineIndex + 1) % taglines.length
   }

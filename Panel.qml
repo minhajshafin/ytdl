@@ -42,6 +42,39 @@ Panel {
   property string videoThumbnail: ""
   property bool metadataLoading: false
 
+  readonly property int maxFastMetaBytes: 16384 // 16 KB strict byte ceiling
+  readonly property int maxMetaBytes: 8192      // 8 KB strict byte ceiling
+  readonly property int maxClipBytes: 2048      // 2 KB max for clipboard URL
+  property string fastMetaBuffer: ""
+  property int fastMetaBytes: 0
+  property string metaBuffer: ""
+  property int metaBytes: 0
+  property string clipBuffer: ""
+  property int clipBytes: 0
+
+  Timer {
+    id: fastMetaDeadlineTimer
+    interval: 3500 // 3.5s total deadline
+    repeat: false
+    onTriggered: {
+      if (fastMetaProc.running) {
+        fastMetaProc.running = false
+      }
+    }
+  }
+
+  Timer {
+    id: metaDeadlineTimer
+    interval: 6000 // 6.0s total deadline
+    repeat: false
+    onTriggered: {
+      if (metaProc.running) {
+        metaProc.running = false
+        root.metadataLoading = false
+      }
+    }
+  }
+
   property var queue: []
   property var recentDownloads: []
   readonly property bool isDownloading: ytdlp.running
@@ -77,6 +110,8 @@ Panel {
   }
 
   Component.onDestruction: {
+    fastMetaDeadlineTimer.stop()
+    metaDeadlineTimer.stop()
     if (ytdlp.running) ytdlp.cancel()
     if (metaProc.running) metaProc.running = false
     if (fastMetaProc.running) fastMetaProc.running = false
@@ -105,8 +140,14 @@ Panel {
   }
 
   function clearMetadata() {
+    fastMetaDeadlineTimer.stop()
+    metaDeadlineTimer.stop()
     if (metaProc.running) metaProc.running = false
     if (fastMetaProc.running) fastMetaProc.running = false
+    root.fastMetaBuffer = ""
+    root.fastMetaBytes = 0
+    root.metaBuffer = ""
+    root.metaBytes = 0
     root.metadataLoading = false
     root.videoTitle = ""
     root.videoUploader = ""
@@ -119,8 +160,7 @@ Panel {
       clearMetadata()
       return
     }
-    if (metaProc.running) metaProc.running = false
-    if (fastMetaProc.running) fastMetaProc.running = false
+    clearMetadata()
     root.metadataLoading = true
 
     var ytId = Downloader.extractYoutubeId(url)
@@ -131,8 +171,11 @@ Panel {
       root.videoUploader = ""
       root.videoDuration = ""
 
-      // 2. Fast 150ms oEmbed query via curl
-      fastMetaProc.command = ["curl", "-s", "--max-time", "3", "https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=" + ytId + "&format=json"]
+      // 2. Fast 150ms oEmbed query via curl with 16KB max filesize and 3.5s deadline
+      root.fastMetaBuffer = ""
+      root.fastMetaBytes = 0
+      fastMetaDeadlineTimer.restart()
+      fastMetaProc.command = ["curl", "-s", "--max-time", "3", "--max-filesize", "16384", "https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=" + ytId + "&format=json"]
       fastMetaProc.running = true
     } else {
       root.videoTitle = ""
@@ -141,8 +184,11 @@ Panel {
       root.videoThumbnail = ""
     }
 
-    // 3. Fast yt-dlp metadata extraction (tab-separated --print instead of heavy 50KB JSON)
-    metaProc.command = ["yt-dlp", "--print", "%(title)s\t%(uploader)s\t%(duration)s\t%(thumbnail)s", "--no-playlist", "--skip-download", url]
+    // 3. Fast yt-dlp metadata extraction with socket timeout and strict 6s deadline
+    root.metaBuffer = ""
+    root.metaBytes = 0
+    metaDeadlineTimer.restart()
+    metaProc.command = ["yt-dlp", "--print", "%(title)s\t%(uploader)s\t%(duration)s\t%(thumbnail)s", "--no-playlist", "--skip-download", "--socket-timeout", "5", url]
     metaProc.running = true
   }
 
@@ -153,7 +199,9 @@ Panel {
     var fmt = root.currentFormat
     var homeDir = Quickshell.env("HOME") || "/home/billy"
     var dest = fmt.isAudio ? (homeDir + "/Music") : (homeDir + "/Videos")
-    var title = root.videoTitle !== "" && root.videoTitle !== "Loading preview…" ? root.videoTitle : "YouTube Media"
+    var rawTitle = root.videoTitle !== "" && root.videoTitle !== "Loading preview…" ? root.videoTitle : "YouTube Media"
+    var title = String(rawTitle).trim()
+    if (title.length > 200) title = title.substring(0, 200)
 
     var task = {
       url: url,
@@ -187,57 +235,122 @@ Panel {
   Process {
     id: clipboardProc
     command: ["wl-paste", "--no-newline"]
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        var raw = String(text || "").trim()
-        if (Downloader.isValidUrl(raw)) {
+    stdout: SplitParser {
+      onRead: function(chunk) {
+        var str = String(chunk || "")
+        root.clipBytes += str.length
+        if (root.clipBytes > root.maxClipBytes) {
+          clipboardProc.running = false
+          root.clipBuffer = ""
+          return
+        }
+        root.clipBuffer += str
+      }
+    }
+    onExited: function(exitCode) {
+      if (exitCode === 0 && root.clipBuffer !== "" && root.clipBytes <= root.maxClipBytes) {
+        var raw = root.clipBuffer.trim()
+        if (raw.length <= root.maxClipBytes && Downloader.isValidUrl(raw)) {
           if (root.inputUrl !== raw) {
             root.inputUrl = raw
             root.fetchMetadata(raw)
           }
         }
       }
+      root.clipBuffer = ""
+      root.clipBytes = 0
     }
   }
 
   Process {
     id: fastMetaProc
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        if (root.inputUrl.trim() === "" || !Downloader.isValidUrl(root.inputUrl)) return
-        try {
-          var data = JSON.parse(String(text || "").trim())
-          if (data && data.title) {
-            root.videoTitle = data.title
-            root.videoUploader = data.author_name || ""
-            if (data.thumbnail_url) root.videoThumbnail = data.thumbnail_url
-          }
-        } catch (e) {}
+    stdout: SplitParser {
+      onRead: function(chunk) {
+        var str = String(chunk || "")
+        root.fastMetaBytes += str.length
+        if (root.fastMetaBytes > root.maxFastMetaBytes) {
+          // Strictly capped: cancel producer immediately
+          fastMetaProc.running = false
+          root.fastMetaBuffer = ""
+          return
+        }
+        root.fastMetaBuffer += str
       }
+    }
+    onExited: function(exitCode) {
+      fastMetaDeadlineTimer.stop()
+      if (exitCode === 0 && root.fastMetaBuffer !== "" && root.fastMetaBytes <= root.maxFastMetaBytes) {
+        if (root.inputUrl.trim() !== "" && Downloader.isValidUrl(root.inputUrl)) {
+          try {
+            var data = JSON.parse(root.fastMetaBuffer.trim())
+            if (data && data.title) {
+              var t = String(data.title || "").trim()
+              root.videoTitle = t.length > 200 ? t.substring(0, 200) : t
+
+              var u = String(data.author_name || "").trim()
+              root.videoUploader = u.length > 100 ? u.substring(0, 100) : u
+
+              var th = String(data.thumbnail_url || "").trim()
+              if (th.length <= 500 && th.match(/^https:\/\//i)) {
+                root.videoThumbnail = th
+              }
+            }
+          } catch (e) {}
+        }
+      }
+      root.fastMetaBuffer = ""
+      root.fastMetaBytes = 0
     }
   }
 
   Process {
     id: metaProc
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        root.metadataLoading = false
-        if (root.inputUrl.trim() === "" || !Downloader.isValidUrl(root.inputUrl)) return
-        var raw = String(text || "").trim()
-        if (raw !== "") {
-          var parts = raw.split("\t")
-          if (parts.length >= 1 && parts[0]) root.videoTitle = parts[0]
-          if (parts.length >= 2 && parts[1]) root.videoUploader = parts[1]
-          if (parts.length >= 3 && parts[2]) root.videoDuration = Downloader.formatDuration(parts[2])
-          if (parts.length >= 4 && parts[3] && !root.videoThumbnail) root.videoThumbnail = parts[3]
+    stdout: SplitParser {
+      onRead: function(chunk) {
+        var str = String(chunk || "")
+        root.metaBytes += str.length
+        if (root.metaBytes > root.maxMetaBytes) {
+          // Strictly capped: cancel producer immediately
+          metaProc.running = false
+          root.metaBuffer = ""
+          root.metadataLoading = false
+          return
         }
+        root.metaBuffer += str
       }
     }
     onExited: function(exitCode) {
+      metaDeadlineTimer.stop()
       root.metadataLoading = false
+      if (exitCode === 0 && root.metaBuffer !== "" && root.metaBytes <= root.maxMetaBytes) {
+        if (root.inputUrl.trim() !== "" && Downloader.isValidUrl(root.inputUrl)) {
+          var raw = root.metaBuffer.trim()
+          if (raw !== "") {
+            var parts = raw.split("\t")
+            if (parts.length >= 1 && parts[0]) {
+              var t = String(parts[0]).trim()
+              root.videoTitle = t.length > 200 ? t.substring(0, 200) : t
+            }
+            if (parts.length >= 2 && parts[1]) {
+              var u = String(parts[1]).trim()
+              root.videoUploader = u.length > 100 ? u.substring(0, 100) : u
+            }
+            if (parts.length >= 3 && parts[2]) {
+              var d = String(parts[2]).trim()
+              if (d.length > 20) d = d.substring(0, 20)
+              root.videoDuration = Downloader.formatDuration(d)
+            }
+            if (parts.length >= 4 && parts[3] && !root.videoThumbnail) {
+              var th = String(parts[3]).trim()
+              if (th.length <= 500 && th.match(/^https:\/\//i)) {
+                root.videoThumbnail = th
+              }
+            }
+          }
+        }
+      }
+      root.metaBuffer = ""
+      root.metaBytes = 0
     }
   }
 
@@ -264,8 +377,10 @@ Panel {
     onFinished: function(task, success, filePath, errorMsg) {
       if (success) {
         var rec = root.recentDownloads.slice()
+        var safeTitle = task && task.title ? String(task.title).trim() : "Media"
+        if (safeTitle.length > 200) safeTitle = safeTitle.substring(0, 200)
         rec.unshift({
-          title: task.title,
+          title: safeTitle,
           filePath: filePath,
           isAudio: task.format.isAudio,
           format: task.format.label
@@ -273,7 +388,7 @@ Panel {
         if (rec.length > 3) rec = rec.slice(0, 3)
         root.recentDownloads = rec
 
-        notifyProc.send("Download Complete", (task.title || "Media") + "\nSaved to " + task.destination, task.format.isAudio ? "audio-x-generic" : "video-x-generic")
+        notifyProc.send("Download Complete", safeTitle + "\nSaved to " + task.destination, task.format.isAudio ? "audio-x-generic" : "video-x-generic")
       } else {
         notifyProc.send("Download Failed", errorMsg || "Download failed", "dialog-error")
       }
@@ -517,6 +632,7 @@ Panel {
         Text {
           width: parent.width
           visible: root.inputUrl.trim() !== "" && !Downloader.isValidUrl(root.inputUrl)
+          textFormat: Text.PlainText
           text: root.inputUrl.trim().indexOf("http://") === 0
             ? "Insecure link: requires https:// (e.g. https://youtube.com/...)"
             : "Please enter a valid https:// media link (YouTube, SoundCloud, Vimeo, etc.)"
@@ -575,6 +691,7 @@ Panel {
 
               Text {
                 Layout.fillWidth: true
+                textFormat: Text.PlainText
                 text: root.metadataLoading ? "Fetching video info..." : root.videoTitle
                 color: root.textMain
                 font.family: Style.font.family
@@ -585,6 +702,7 @@ Panel {
 
               Text {
                 Layout.fillWidth: true
+                textFormat: Text.PlainText
                 visible: !root.metadataLoading && (root.videoUploader !== "" || root.videoDuration !== "")
                 text: (root.videoUploader !== "" ? root.videoUploader : "") + (root.videoDuration !== "" ? " · " + root.videoDuration : "")
                 color: root.textMuted
@@ -845,6 +963,7 @@ Panel {
                   color: root.textMuted
                 }
                 Text {
+                  textFormat: Text.PlainText
                   text: ytdlp.stateText
                   font.family: Style.font.family
                   font.pixelSize: Style.space(13)
@@ -862,6 +981,7 @@ Panel {
                   color: root.textMuted
                 }
                 Text {
+                  textFormat: Text.PlainText
                   text: ytdlp.speedText !== "" ? ytdlp.speedText : "—"
                   font.family: Style.font.family
                   font.pixelSize: Style.space(13)
@@ -884,6 +1004,7 @@ Panel {
                   color: root.textMuted
                 }
                 Text {
+                  textFormat: Text.PlainText
                   text: ytdlp.sizeText !== "" ? ytdlp.sizeText : "—"
                   font.family: Style.font.family
                   font.pixelSize: Style.space(13)
@@ -901,6 +1022,7 @@ Panel {
                   color: root.textMuted
                 }
                 Text {
+                  textFormat: Text.PlainText
                   text: ytdlp.etaText !== "" ? ytdlp.etaText : "—"
                   font.family: Style.font.family
                   font.pixelSize: Style.space(13)
@@ -995,6 +1117,7 @@ Panel {
                 }
 
                 Text {
+                  textFormat: Text.PlainText
                   text: modelData.title || modelData.url
                   font.family: Style.font.family
                   font.pixelSize: Style.space(12)
@@ -1040,6 +1163,7 @@ Panel {
                 }
 
                 Text {
+                  textFormat: Text.PlainText
                   text: modelData.title
                   font.family: Style.font.family
                   font.pixelSize: Style.space(12)

@@ -24,7 +24,7 @@ Item {
   Process {
     id: killTermProc
     function killGroup(pgid) {
-      if (!pgid || pgid <= 0) return
+      if (!pgid || pgid <= 1) return
       command = ["kill", "-TERM", "--", "-" + pgid]
       running = true
     }
@@ -33,7 +33,7 @@ Item {
   Process {
     id: killKillProc
     function killGroup(pgid) {
-      if (!pgid || pgid <= 0) return
+      if (!pgid || pgid <= 1) return
       command = ["kill", "-KILL", "--", "-" + pgid]
       running = true
     }
@@ -45,25 +45,20 @@ Item {
     repeat: false
     property int targetPgid: 0
     onTriggered: {
-      if (targetPgid > 0) {
+      if (targetPgid > 1) {
         killKillProc.killGroup(targetPgid)
         targetPgid = 0
       }
     }
   }
 
-  Process {
-    id: destructionProc
-  }
-
   Component.onDestruction: {
     var pgid = root.activePgid
     root.activePgid = 0
     killEscalationTimer.stop()
-    if (pgid > 0) {
+    if (pgid > 1) {
       proc.running = false
-      destructionProc.command = ["sh", "-c", "kill -TERM -- -" + pgid + " 2>/dev/null; sleep 0.5; kill -KILL -- -" + pgid + " 2>/dev/null &"]
-      destructionProc.running = true
+      killTermProc.killGroup(pgid)
     }
   }
 
@@ -137,9 +132,14 @@ Item {
     diagnosticCharCount = 0
     activePgid = 0
 
+    var homeDir = Quickshell.env("HOME") || "/tmp"
+    var defaultDest = (task.format && task.format.isAudio) ? (homeDir + "/Music") : (homeDir + "/Videos")
+
     var cmd = [
       "setsid",
       "yt-dlp",
+      "--ignore-config",
+      "--no-plugin-dirs",
       "--no-playlist",
       "-N", "4",
       "--buffer-size", "1024k",
@@ -149,7 +149,7 @@ Item {
       "--no-mtime",
       "--progress-template", "DOWNLOAD_PROGRESS:%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s|%(progress._total_bytes_estimate_str)s",
       "--print", "after_move:SAVED_PATH:%(filepath)s",
-      "-P", task.destination || (task.format && task.format.isAudio ? (Quickshell.env("HOME") + "/Music") : (Quickshell.env("HOME") + "/Videos")),
+      "-P", task.destination || defaultDest,
       "-o", "%(title)s.%(ext)s"
     ]
 
@@ -159,6 +159,7 @@ Item {
       }
     }
 
+    cmd.push("--")
     cmd.push(task.url)
     proc.command = cmd
     proc.running = true
@@ -174,7 +175,7 @@ Item {
       proc.running = false
     }
 
-    if (pgid > 0) {
+    if (pgid > 1) {
       killTermProc.killGroup(pgid)
       killEscalationTimer.targetPgid = pgid
       killEscalationTimer.restart()
@@ -194,13 +195,15 @@ Item {
     id: proc
 
     onStarted: {
-      if (proc.processId) {
-        root.activePgid = proc.processId
+      var pid = parseInt(proc.processId, 10) || 0
+      if (pid > 1) {
+        root.activePgid = pid
       }
     }
     onProcessIdChanged: {
-      if (proc.processId) {
-        root.activePgid = proc.processId
+      var pid = parseInt(proc.processId, 10) || 0
+      if (pid > 1) {
+        root.activePgid = pid
       }
     }
 
@@ -208,7 +211,10 @@ Item {
       onRead: function(line) {
         var str = String(line || "").trim()
         if (str.indexOf("SAVED_PATH:") === 0) {
-          root.savedPath = str.substring(11).trim()
+          var sp = str.substring(11).trim()
+          if (sp.length > 0 && sp.length <= 1024 && sp.charAt(0) === "/" && !/[\r\n\0]/.test(sp)) {
+            root.savedPath = sp
+          }
           return
         }
 

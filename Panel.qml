@@ -75,6 +75,19 @@ Panel {
     }
   }
 
+  Timer {
+    id: clipDeadlineTimer
+    interval: 1500 // 1.5s total deadline for clipboard access
+    repeat: false
+    onTriggered: {
+      if (clipboardProc.running) {
+        clipboardProc.running = false
+        root.clipBuffer = ""
+        root.clipBytes = 0
+      }
+    }
+  }
+
   property var queue: []
   property var recentDownloads: []
   readonly property bool isDownloading: ytdlp.running
@@ -89,7 +102,6 @@ Panel {
 
   function open() {
     root.controller.show()
-    checkClipboard()
     cycleTagline()
     Qt.callLater(function() {
       if (root.inputUrl === "") urlField.forceActiveFocus()
@@ -112,6 +124,7 @@ Panel {
   Component.onDestruction: {
     fastMetaDeadlineTimer.stop()
     metaDeadlineTimer.stop()
+    clipDeadlineTimer.stop()
     if (ytdlp.running) ytdlp.cancel()
     if (metaProc.running) metaProc.running = false
     if (fastMetaProc.running) fastMetaProc.running = false
@@ -131,6 +144,9 @@ Panel {
 
   function checkClipboard() {
     if (!clipboardProc.running) {
+      root.clipBuffer = ""
+      root.clipBytes = 0
+      clipDeadlineTimer.restart()
       clipboardProc.running = true
     }
   }
@@ -175,7 +191,7 @@ Panel {
       root.fastMetaBuffer = ""
       root.fastMetaBytes = 0
       fastMetaDeadlineTimer.restart()
-      fastMetaProc.command = ["curl", "-s", "--max-time", "3", "--max-filesize", "16384", "https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=" + ytId + "&format=json"]
+      fastMetaProc.command = ["curl", "-q", "-s", "--max-time", "3", "--max-filesize", "16384", "--", "https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=" + ytId + "&format=json"]
       fastMetaProc.running = true
     } else {
       root.videoTitle = ""
@@ -188,7 +204,17 @@ Panel {
     root.metaBuffer = ""
     root.metaBytes = 0
     metaDeadlineTimer.restart()
-    metaProc.command = ["yt-dlp", "--print", "%(title)s\t%(uploader)s\t%(duration)s\t%(thumbnail)s", "--no-playlist", "--skip-download", "--socket-timeout", "5", url]
+    metaProc.command = [
+      "yt-dlp",
+      "--ignore-config",
+      "--no-plugin-dirs",
+      "--no-playlist",
+      "--skip-download",
+      "--socket-timeout", "5",
+      "--print", "%(title)s\t%(uploader)s\t%(duration)s\t%(thumbnail)s",
+      "--",
+      url
+    ]
     metaProc.running = true
   }
 
@@ -197,7 +223,7 @@ Panel {
     if (!url) return
 
     var fmt = root.currentFormat
-    var homeDir = Quickshell.env("HOME") || "/home/billy"
+    var homeDir = Quickshell.env("HOME") || "/tmp"
     var dest = fmt.isAudio ? (homeDir + "/Music") : (homeDir + "/Videos")
     var rawTitle = root.videoTitle !== "" && root.videoTitle !== "Loading preview…" ? root.videoTitle : "YouTube Media"
     var title = String(rawTitle).trim()
@@ -211,6 +237,10 @@ Panel {
     }
 
     if (ytdlp.running) {
+      if (root.queue.length >= 10) {
+        notifyProc.send("Queue Full", "Maximum 10 queued downloads reached", "dialog-warning")
+        return
+      }
       var q = root.queue.slice()
       q.push(task)
       root.queue = q
@@ -248,6 +278,7 @@ Panel {
       }
     }
     onExited: function(exitCode) {
+      clipDeadlineTimer.stop()
       if (exitCode === 0 && root.clipBuffer !== "" && root.clipBytes <= root.maxClipBytes) {
         var raw = root.clipBuffer.trim()
         if (raw.length <= root.maxClipBytes && Downloader.isValidUrl(raw)) {
@@ -291,7 +322,7 @@ Panel {
               root.videoUploader = u.length > 100 ? u.substring(0, 100) : u
 
               var th = String(data.thumbnail_url || "").trim()
-              if (th.length <= 500 && th.match(/^https:\/\//i)) {
+              if (th.length <= 500 && Downloader.isValidThumbnailUrl(th)) {
                 root.videoThumbnail = th
               }
             }
@@ -342,7 +373,7 @@ Panel {
             }
             if (parts.length >= 4 && parts[3] && !root.videoThumbnail) {
               var th = String(parts[3]).trim()
-              if (th.length <= 500 && th.match(/^https:\/\//i)) {
+              if (th.length <= 500 && Downloader.isValidThumbnailUrl(th)) {
                 root.videoThumbnail = th
               }
             }
@@ -357,7 +388,13 @@ Panel {
   Process {
     id: notifyProc
     function send(title, body, icon) {
-      command = ["notify-send", "-a", "YouTube Downloader", "-i", icon || "video-x-generic", title, body]
+      var t = String(title || "YouTube Downloader").trim()
+      if (t.length > 100) t = t.substring(0, 100)
+      var b = String(body || "").trim()
+      if (b.length > 500) b = b.substring(0, 500)
+      var ic = String(icon || "video-x-generic").trim()
+      if (!ic.match(/^[a-z0-9_-]+$/i)) ic = "video-x-generic"
+      command = ["notify-send", "-a", "YouTube Downloader", "-i", ic, "--", t, b]
       running = true
     }
   }
@@ -365,8 +402,11 @@ Panel {
   Process {
     id: xdgProc
     function openTarget(path) {
-      if (path && path !== "") {
-        command = ["xdg-open", path]
+      if (!path || typeof path !== "string") return
+      var p = path.trim()
+      // Enforce absolute path starting with /, no control characters, no newlines
+      if (p.length > 1 && p.charAt(0) === "/" && p.indexOf("\0") === -1 && p.indexOf("\n") === -1) {
+        command = ["xdg-open", p]
         running = true
       }
     }

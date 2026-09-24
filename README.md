@@ -67,11 +67,8 @@ Designed to seamlessly match Omarchy's native aesthetic with dynamic theme react
 2. Ensure runtime dependencies are installed:
 
    ```bash
-   # Core dependencies
-   sudo pacman -S yt-dlp ffmpeg wl-clipboard
-
-   # Metadata & thumbnail embedding support
-   pip install --user mutagen
+   # Core dependencies and metadata/thumbnail embedding support
+   sudo pacman -S yt-dlp ffmpeg wl-clipboard python-mutagen
    ```
 
 3. Enable and place the widget on your Omarchy bar:

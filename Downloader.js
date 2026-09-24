@@ -103,6 +103,16 @@ var ALLOWED_DOMAINS = [
   "facebook.com"
 ];
 
+var ALLOWED_THUMBNAIL_DOMAINS = [
+  "i.ytimg.com",
+  "ytimg.com",
+  "youtube.com",
+  "sndcdn.com",
+  "soundcloud.com",
+  "vimeocdn.com",
+  "tiktokcdn.com"
+];
+
 function isPrivateOrNonPublicHost(host) {
   if (!host || typeof host !== "string") return true;
 
@@ -151,8 +161,8 @@ function parseUrl(urlStr) {
   var trimmed = urlStr.trim();
   if (trimmed === "") return null;
 
-  // Enforce scheme: strictly require https
-  var schemeMatch = trimmed.match(/^(https):\/\/([^\/\?#]+)(?:([\/\?#].*))?$/i);
+  // Enforce scheme: strictly require https and disallow backslashes, whitespace, or control characters in authority
+  var schemeMatch = trimmed.match(/^(https):\/\/([^\/\\?#\s]+)(?:([\/?#].*))?$/i);
   if (!schemeMatch) return null;
 
   var scheme = schemeMatch[1].toLowerCase();
@@ -161,6 +171,9 @@ function parseUrl(urlStr) {
 
   // Reject user credentials (@ in authority)
   if (authority.indexOf("@") !== -1) return null;
+
+  // Reject control characters or newlines in path
+  if (/[\r\n\0]/.test(path)) return null;
 
   var host = "";
   var port = "";
@@ -193,6 +206,11 @@ function parseUrl(urlStr) {
 
   if (host === "") return null;
 
+  // Enforce strict RFC 1123 hostname syntax (only alphanumeric, dots, and hyphens)
+  if (!host.match(/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/)) {
+    return null;
+  }
+
   return {
     scheme: scheme,
     host: host,
@@ -220,6 +238,31 @@ function isValidUrl(str) {
   return false;
 }
 
+function isValidThumbnailUrl(str) {
+  var parsed = parseUrl(str);
+  if (!parsed) return false;
+
+  if (isPrivateOrNonPublicHost(parsed.host)) {
+    return false;
+  }
+
+  for (var i = 0; i < ALLOWED_THUMBNAIL_DOMAINS.length; i++) {
+    var tDomain = ALLOWED_THUMBNAIL_DOMAINS[i];
+    if (parsed.host === tDomain || parsed.host.endsWith("." + tDomain)) {
+      return true;
+    }
+  }
+
+  for (var j = 0; j < ALLOWED_DOMAINS.length; j++) {
+    var domain = ALLOWED_DOMAINS[j];
+    if (parsed.host === domain || parsed.host.endsWith("." + domain)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function extractYoutubeId(url) {
   var parsed = parseUrl(url);
   if (!parsed) return "";
@@ -231,12 +274,34 @@ function extractYoutubeId(url) {
   if (!isYoutube && !isYoutuBe) return "";
 
   if (isYoutuBe) {
-    var ym = parsed.path.match(/^\/([\w-]{11})/i);
+    var ym = parsed.path.match(/^\/([\w-]{11})(?:[^\w-]|$)/i);
     return ym ? ym[1] : "";
   }
 
-  var m = parsed.path.match(/(?:\/(?:embed|v|shorts)\/|watch\?.*[?&]v=|watch\?v=)([\w-]{11})/i);
-  return m ? m[1] : "";
+  // Check /embed/, /v/, /shorts/
+  var pathOnly = parsed.path.split(/[?#]/)[0];
+  var sm = pathOnly.match(/^\/(?:embed|v|shorts)\/([\w-]{11})(?:[^\w-]|$)/i);
+  if (sm) return sm[1];
+
+  // For /watch, parse query parameters without greedy regex to prevent UI preview spoofing
+  var qIdx = parsed.path.indexOf("?");
+  if (qIdx !== -1) {
+    var queryStr = parsed.path.substring(qIdx + 1).split("#")[0];
+    var params = queryStr.split("&");
+    for (var i = 0; i < params.length; i++) {
+      var pair = params[i].split("=");
+      try {
+        if (decodeURIComponent(pair[0]) === "v" && pair.length > 1) {
+          var val = decodeURIComponent(pair[1]);
+          if (val.match(/^[\w-]{11}$/)) {
+            return val;
+          }
+        }
+      } catch (e) {}
+    }
+  }
+
+  return "";
 }
 
 function getInstantThumbnail(url) {

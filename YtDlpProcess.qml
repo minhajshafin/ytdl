@@ -135,6 +135,10 @@ Item {
     var homeDir = Quickshell.env("HOME") || "/tmp"
     var defaultDest = (task.format && task.format.isAudio) ? (homeDir + "/Music") : (homeDir + "/Videos")
 
+    stdoutLineBuffer = ""
+    stderrLineBuffer = ""
+    totalStderrBytes = 0
+
     var cmd = [
       "setsid",
       "yt-dlp",
@@ -170,6 +174,10 @@ Item {
     var pgid = root.activePgid
     root.activePgid = 0
 
+    stdoutLineBuffer = ""
+    stderrLineBuffer = ""
+    totalStderrBytes = 0
+
     if (proc.running) {
       stateText = "Cancelled"
       proc.running = false
@@ -191,6 +199,114 @@ Item {
     }
   }
 
+  property string stdoutLineBuffer: ""
+  property string stderrLineBuffer: ""
+  readonly property int maxLineLength: 2048
+  property int totalStderrBytes: 0
+
+  function processStdoutLine(line) {
+    if (!line) return
+    var str = String(line).trim()
+    if (str === "") return
+
+    if (str.indexOf("SAVED_PATH:") === 0) {
+      var sp = str.substring(11).trim()
+      if (sp.length > 0 && sp.length <= 1024 && sp.charAt(0) === "/" && !/[\r\n\0]/.test(sp)) {
+        root.savedPath = sp
+      }
+      return
+    }
+
+    var p = Downloader.parseProgress(str)
+    if (p) {
+      root.progress = p.percent
+      root.stateText = "Downloading"
+      if (p.speed && p.speed !== "Unknown B/s") root.speedText = p.speed
+      if (p.eta) root.etaText = root.formatEta(p.eta)
+      if (p.total && p.total !== "N/A" && p.total !== "NA") root.sizeText = p.total
+      return
+    }
+
+    if (str.indexOf("[ExtractAudio]") !== -1) {
+      root.stateText = "Extracting"
+    } else if (str.indexOf("[Merger]") !== -1) {
+      root.stateText = "Merging"
+    } else if (str.indexOf("[download] Destination:") !== -1) {
+      root.stateText = "Downloading"
+    }
+  }
+
+  function handleStdoutChunk(chunk) {
+    if (!chunk) return
+    var str = String(chunk)
+    var combined = root.stdoutLineBuffer + str
+    var newlineIdx = combined.indexOf("\n")
+
+    if (newlineIdx === -1) {
+      if (combined.length > root.maxLineLength) {
+        root.processStdoutLine(combined.substring(0, root.maxLineLength))
+        root.stdoutLineBuffer = ""
+      } else {
+        root.stdoutLineBuffer = combined
+      }
+      return
+    }
+
+    var lines = combined.split("\n")
+    var remainder = lines.pop()
+    if (remainder.length > root.maxLineLength) {
+      root.processStdoutLine(remainder.substring(0, root.maxLineLength))
+      root.stdoutLineBuffer = ""
+    } else {
+      root.stdoutLineBuffer = remainder
+    }
+
+    for (var i = 0; i < lines.length; i++) {
+      var l = lines[i]
+      if (l.length > root.maxLineLength) {
+        l = l.substring(0, root.maxLineLength)
+      }
+      root.processStdoutLine(l)
+    }
+  }
+
+  function handleStderrChunk(chunk) {
+    if (!chunk) return
+    var str = String(chunk)
+    root.totalStderrBytes += str.length
+    if (root.totalStderrBytes > 32768) return
+
+    var combined = root.stderrLineBuffer + str
+    var newlineIdx = combined.indexOf("\n")
+
+    if (newlineIdx === -1) {
+      if (combined.length > 512) {
+        root.appendDiagnostic(combined.substring(0, 512))
+        root.stderrLineBuffer = ""
+      } else {
+        root.stderrLineBuffer = combined
+      }
+      return
+    }
+
+    var lines = combined.split("\n")
+    var remainder = lines.pop()
+    if (remainder.length > 512) {
+      root.appendDiagnostic(remainder.substring(0, 512))
+      root.stderrLineBuffer = ""
+    } else {
+      root.stderrLineBuffer = remainder
+    }
+
+    for (var i = 0; i < lines.length; i++) {
+      var l = lines[i]
+      if (l.length > 512) {
+        l = l.substring(0, 512)
+      }
+      root.appendDiagnostic(l)
+    }
+  }
+
   Process {
     id: proc
 
@@ -208,39 +324,16 @@ Item {
     }
 
     stdout: SplitParser {
-      onRead: function(line) {
-        var str = String(line || "").trim()
-        if (str.indexOf("SAVED_PATH:") === 0) {
-          var sp = str.substring(11).trim()
-          if (sp.length > 0 && sp.length <= 1024 && sp.charAt(0) === "/" && !/[\r\n\0]/.test(sp)) {
-            root.savedPath = sp
-          }
-          return
-        }
-
-        var p = Downloader.parseProgress(str)
-        if (p) {
-          root.progress = p.percent
-          root.stateText = "Downloading"
-          if (p.speed && p.speed !== "Unknown B/s") root.speedText = p.speed
-          if (p.eta) root.etaText = root.formatEta(p.eta)
-          if (p.total && p.total !== "N/A" && p.total !== "NA") root.sizeText = p.total
-          return
-        }
-
-        if (str.indexOf("[ExtractAudio]") !== -1) {
-          root.stateText = "Extracting"
-        } else if (str.indexOf("[Merger]") !== -1) {
-          root.stateText = "Merging"
-        } else if (str.indexOf("[download] Destination:") !== -1) {
-          root.stateText = "Downloading"
-        }
+      splitMarker: ""
+      onRead: function(chunk) {
+        root.handleStdoutChunk(chunk)
       }
     }
 
     stderr: SplitParser {
-      onRead: function(line) {
-        root.appendDiagnostic(line)
+      splitMarker: ""
+      onRead: function(chunk) {
+        root.handleStderrChunk(chunk)
       }
     }
 
@@ -248,6 +341,16 @@ Item {
       killEscalationTimer.stop()
       killEscalationTimer.targetPgid = 0
       root.activePgid = 0
+
+      if (root.stdoutLineBuffer !== "") {
+        root.processStdoutLine(root.stdoutLineBuffer.substring(0, root.maxLineLength))
+        root.stdoutLineBuffer = ""
+      }
+      if (root.stderrLineBuffer !== "") {
+        root.appendDiagnostic(root.stderrLineBuffer.substring(0, 512))
+        root.stderrLineBuffer = ""
+      }
+      root.totalStderrBytes = 0
 
       var task = root.currentTask
       root.currentTask = null

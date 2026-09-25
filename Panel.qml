@@ -266,6 +266,7 @@ Panel {
     id: clipboardProc
     command: ["wl-paste", "--no-newline"]
     stdout: SplitParser {
+      splitMarker: ""
       onRead: function(chunk) {
         var str = String(chunk || "")
         root.clipBytes += str.length
@@ -296,6 +297,7 @@ Panel {
   Process {
     id: fastMetaProc
     stdout: SplitParser {
+      splitMarker: ""
       onRead: function(chunk) {
         var str = String(chunk || "")
         root.fastMetaBytes += str.length
@@ -337,6 +339,7 @@ Panel {
   Process {
     id: metaProc
     stdout: SplitParser {
+      splitMarker: ""
       onRead: function(chunk) {
         var str = String(chunk || "")
         root.metaBytes += str.length

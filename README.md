@@ -58,36 +58,38 @@ Designed to seamlessly match Omarchy's native aesthetic with dynamic theme react
 
 ## 📥 Installation
 
-1. Clone or link the repository to your Omarchy plugins directory:
+### Single-Line Setup (Recommended)
 
-   ```bash
-   ln -s /home/billy/Projects/ytdl ~/.config/omarchy/plugins/billy.ytdl
-   ```
+Install dependencies and add the plugin to your Omarchy bar in one command:
 
-2. Ensure runtime dependencies are installed:
+```bash
+sudo pacman -S --needed yt-dlp ffmpeg wl-clipboard python-mutagen && omarchy plugin add https://github.com/minhajshafin/ytdl.git --enable
+```
 
-   ```bash
-   # Core dependencies and metadata/thumbnail embedding support
-   sudo pacman -S yt-dlp ffmpeg wl-clipboard python-mutagen
-   ```
+### Plugin Only
 
-3. Enable and place the widget on your Omarchy bar:
+If you already have `yt-dlp` and `ffmpeg` installed:
 
-   ```bash
-   omarchy plugin enable billy.ytdl
-   omarchy bar put billy.ytdl --after omarchy.system-update
-   omarchy restart shell
-   ```
+```bash
+omarchy plugin add https://github.com/minhajshafin/ytdl.git --enable
+```
+
+---
+
+## 🔄 Updates & Management
+
+Update to the latest version at any time:
+
+```bash
+omarchy plugin update billy.ytdl
+```
 
 ### Removal
 
-To disable and remove the plugin:
+To completely disable and remove the plugin:
 
 ```bash
-omarchy bar remove billy.ytdl
-omarchy plugin disable billy.ytdl
-rm -rf ~/.config/omarchy/plugins/billy.ytdl
-omarchy restart shell
+omarchy plugin remove billy.ytdl
 ```
 
 ---
